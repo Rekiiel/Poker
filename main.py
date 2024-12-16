@@ -2,6 +2,8 @@ from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import random
 from collections import Counter
+import time
+import os
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'votre_clé_secrète_ici'
@@ -97,6 +99,7 @@ class Partie:
         self.dealer_index = 0
         self.mises_tour = {}
         self.gestion_tour = None
+        self.deconnexions_temporaires = {}  # Pour suivre les déconnexions temporaires
         self.initialiser_deck()
 
     def initialiser_deck(self):
@@ -383,6 +386,17 @@ class Partie:
             if username not in self.mises_tour:
                 self.mises_tour[username] = 0
 
+        # Déterminer les positions des blinds
+        joueurs_liste = list(self.joueurs.keys())
+        if len(joueurs_liste) >= 2:
+            dealer_index = self.dealer_index % len(joueurs_liste)
+            big_blind_index = (self.dealer_index + 2) % len(joueurs_liste)
+            dealer = joueurs_liste[dealer_index]
+            big_blind = joueurs_liste[big_blind_index]
+        else:
+            dealer = None
+            big_blind = None
+
         socketio.emit('update_game_state', {
             'pot': self.pot,
             'tour_actuel': self.gestion_tour.joueur_actuel() if self.gestion_tour else None,
@@ -393,7 +407,9 @@ class Partie:
                 u: {
                     'jetons': j['jetons'],
                     'en_jeu': j['en_jeu'],
-                    'mise_tour': self.mises_tour.get(u, 0)  # Utiliser get() avec valeur par défaut
+                    'mise_tour': self.mises_tour.get(u, 0),
+                    'is_dealer': u == dealer,
+                    'is_big_blind': u == big_blind
                 } for u, j in self.joueurs.items()
             }
         }, room=self.room_id)
@@ -423,6 +439,74 @@ class Partie:
             'combinaison': combinaison,
             'cartes_gagnantes': cartes_gagnantes
         }, room=username)
+
+    def gerer_deconnexion_temporaire(self, username):
+        # Supprimer immédiatement le joueur
+        if username in self.joueurs:
+            # Si c'était le tour du joueur déconnecté
+            if self.gestion_tour and self.gestion_tour.joueur_actuel() == username:
+                # Coucher automatiquement le joueur
+                self.joueurs[username]['en_jeu'] = False
+                socketio.emit('notification', {
+                    'message': f'{username} a été déconnecté et ses cartes ont été couchées',
+                    'type': 'error'
+                }, room=self.room_id)
+                
+                # Vérifier s'il ne reste qu'un joueur
+                joueurs_actifs = [j for j in self.joueurs if self.joueurs[j]['en_jeu']]
+                if len(joueurs_actifs) == 1:
+                    self.fin_manche(joueurs_actifs[0])
+                else:
+                    # Passer au joueur suivant
+                    self.gestion_tour.passer_au_suivant()
+                    self.update_game_state()
+            
+            # Supprimer le joueur et continuer la partie
+            self.retirer_joueur(username)
+            socketio.emit('notification', {
+                'message': f'{username} a quitté la table',
+                'type': 'error'
+            }, room=self.room_id)
+            
+            # Si la table est vide après la déconnexion, la supprimer
+            if not self.joueurs:
+                if self.room_id in games:
+                    del games[self.room_id]
+                    socketio.emit('update_tables', {
+                        'tables': {
+                            room_id: {
+                                'joueurs': {
+                                    u: {'jetons': j['jetons']} 
+                                    for u, j in game.joueurs.items()
+                                }
+                            } for room_id, game in games.items()
+                        }
+                    }, broadcast=True)
+
+    def retirer_joueur(self, username):
+        if username in self.joueurs:
+            # Nettoyer les mises du joueur
+            if username in self.mises_tour:
+                del self.mises_tour[username]
+            
+            # Supprimer le joueur
+            del self.joueurs[username]
+            del self.deconnexions_temporaires[username]
+            
+            # Mettre à jour la gestion du tour si nécessaire
+            if self.gestion_tour:
+                self.gestion_tour.ordre_joueurs = list(self.joueurs.keys())
+                if len(self.joueurs) < 2:
+                    if len(self.joueurs) == 1:
+                        dernier_joueur = next(iter(self.joueurs.keys()))
+                        self.fin_manche(dernier_joueur)
+                    else:
+                        self.phase = 'attente'
+                else:
+                    # Si c'était le tour du joueur déconnecté
+                    if self.gestion_tour.joueur_actuel() == username:
+                        self.gestion_tour.passer_au_suivant()
+                        self.update_game_state()
 
 @app.route('/')
 def index():
@@ -475,7 +559,7 @@ def on_join(data):
         emit('erreur', {'message': 'Cette table n\'existe plus'})
         return
     
-    if len(games[room].joueurs) >= 6:
+    if len(games[room].joueurs) >= 7:
         emit('erreur', {'message': 'La table est pleine'})
         return
     
@@ -618,10 +702,16 @@ def on_leave(data):
             if username in game.mises_tour:
                 del game.mises_tour[username]
             
+            # Si c'était le tour du joueur qui quitte
+            if game.gestion_tour and game.gestion_tour.joueur_actuel() == username:
+                game.joueurs[username]['en_jeu'] = False
+                # Passer au joueur suivant
+                game.gestion_tour.passer_au_suivant()
+            
             # Supprimer le joueur
             del game.joueurs[username]
             
-            # Mettre à jour la gestion du tour si nécessaire
+            # Mettre à jour la gestion du tour
             if game.gestion_tour:
                 game.gestion_tour.ordre_joueurs = list(game.joueurs.keys())
                 if len(game.joueurs) < 2:
@@ -639,12 +729,35 @@ def on_leave(data):
             # Notifier les autres joueurs
             emit('joueur_parti', {'username': username}, room=room)
             
-            # Mettre à jour l'état du jeu
+            # Mettre à jour l'état du jeu pour les joueurs restants
             game.update_game_state()
             
             # Si la partie est vide, la supprimer
             if not game.joueurs:
                 del games[room]
+                # Notifier tous les clients de la suppression de la table
+                emit('update_tables', {
+                    'tables': {
+                        room_id: {
+                            'joueurs': {
+                                u: {'jetons': j['jetons']} 
+                                for u, j in game.joueurs.items()
+                            }
+                        } for room_id, game in games.items()
+                    }
+                }, broadcast=True)
+            else:
+                # Mettre à jour la liste des tables pour tous les clients
+                emit('update_tables', {
+                    'tables': {
+                        room_id: {
+                            'joueurs': {
+                                u: {'jetons': j['jetons']} 
+                                for u, j in game.joueurs.items()
+                            }
+                        } for room_id, game in games.items()
+                    }
+                }, broadcast=True)
 
 @socketio.on('demander_combinaison')
 def handle_demander_combinaison(data):
@@ -656,7 +769,6 @@ def handle_demander_combinaison(data):
 
 @socketio.on('connect')
 def handle_connect(auth):
-    # Quand un client se connecte, on enregistre son sid
     session_id = request.sid
     emit('connected', {'sid': session_id})
     
@@ -671,17 +783,25 @@ def handle_connect(auth):
             } for room_id, game in games.items()
         }
     })
+    
+    # Vérifier si le joueur était temporairement déconnecté
+    for game in games.values():
+        for username in game.deconnexions_temporaires:
+            if username in game.joueurs:
+                del game.deconnexions_temporaires[username]
+                socketio.emit('notification', {
+                    'message': f'{username} s\'est reconnecté',
+                    'type': 'success'
+                }, room=game.room_id)
+                break
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    # Trouver la partie et le joueur qui s'est déconnecté
     session_id = request.sid
     for room_id, game in list(games.items()):
         for username in list(game.joueurs.keys()):
-            if username in game.joueurs:
-                # Simuler un "quitter_partie" pour ce joueur
-                on_leave({'username': username, 'room': room_id})
-                emit('joueur_deconnecte', {'username': username}, room=room_id)
+            if username in request.namespace.rooms:  # Vérifier si le joueur est dans la room
+                game.gerer_deconnexion_temporaire(username)
                 break
 
 @socketio.on('ping_client')
@@ -689,4 +809,6 @@ def handle_ping():
     emit('pong_server')
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True) 
+    # Modification pour le déploiement
+    port = int(os.environ.get('PORT', 5000))
+    socketio.run(app, host='0.0.0.0', port=port) 

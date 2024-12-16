@@ -9,23 +9,51 @@
         body {
             font-family: Arial, sans-serif;
             margin: 0;
-            padding: 20px;
+            padding: 0;
             background-color: #1a1a1a;
             color: white;
+            height: 100vh;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .container {
-            max-width: 1200px;
-            margin: 0 auto;
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #game-section {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
         }
 
         .table {
             background-color: #2d572c;
+            background-image: radial-gradient(circle at center, #3a6b39 0%, #2d572c 70%);
             border-radius: 200px;
-            padding: 40px;
-            margin: 20px 0;
-            position: relative;
+            padding: 30px;
+            position: absolute;
+            top: 45%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             height: 500px;
+            width: 80%;
+            max-width: 1000px;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+            border: 12px solid #4a3527;
+            margin-top: 40px;
         }
 
         .board {
@@ -34,55 +62,188 @@
             left: 50%;
             transform: translate(-50%, -50%);
             text-align: center;
+            background-color: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 15px;
+            min-width: 300px;
         }
 
         .card {
             display: inline-block;
             width: 60px;
-            height: 90px;
+            height: 85px;
             background-color: white;
-            border-radius: 5px;
+            border-radius: 8px;
             margin: 0 5px;
             color: black;
-            line-height: 90px;
+            line-height: 85px;
             font-size: 24px;
-            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+            box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.4);
             transition: all 0.3s ease;
+            position: relative;
+            text-align: center;
         }
 
         .card.red {
-            color: red;
+            color: #d40000;
         }
 
         .card.winning {
-            box-shadow: 0 0 15px #ffd700;
-            transform: scale(1.1);
+            box-shadow: 0 0 20px #ffd700;
+            transform: scale(1.15);
             background-color: #fffacd;
+            z-index: 10;
         }
 
         .player-spot {
             position: absolute;
-            width: 150px;
-            background-color: rgba(0, 0, 0, 0.5);
-            padding: 10px;
+            width: 130px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 8px;
             border-radius: 10px;
             text-align: center;
+            transition: all 0.3s ease;
+            z-index: 10;
         }
 
         .player-spot.active {
-            box-shadow: 0 0 15px #ffd700;
+            box-shadow: 0 0 25px #ffd700;
+            transform: scale(1.05);
+            z-index: 100;
+        }
+
+        .player-indicator {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            top: -15px;
+            right: -15px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            z-index: 101;
+        }
+
+        .dealer-button {
+            background-color: #ffffff;
+            border: 2px solid #4CAF50;
+            color: #000;
+            font-size: 12px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .big-blind-button {
+            background-color: #ff9800;
+            border: 2px solid #f57c00;
+            color: #fff;
+            font-size: 12px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .mise {
             position: absolute;
             background-color: #4CAF50;
             color: white;
-            padding: 5px 10px;
+            padding: 6px 12px;
             border-radius: 15px;
             font-size: 14px;
             top: -20px;
             left: 50%;
             transform: translateX(-50%);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+
+        .pot {
+            font-size: 28px;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 8px 20px;
+            border-radius: 20px;
+            display: inline-block;
+        }
+
+        /* Positions des joueurs réorganisées pour 7 joueurs */
+        .player-spot:nth-child(1) { bottom: 2%; left: 50%; transform: translateX(-50%); }     /* Bas centre */
+        .player-spot:nth-child(2) { bottom: 10%; right: 10%; }                                /* Coin bas droite */
+        .player-spot:nth-child(3) { top: 45%; right: 2%; }                                    /* Milieu droite */
+        .player-spot:nth-child(4) { top: 15%; right: 15%; }                                   /* Haut droite */
+        .player-spot:nth-child(5) { top: 15%; left: 15%; }                                    /* Haut gauche */
+        .player-spot:nth-child(6) { top: 45%; left: 2%; }                                     /* Milieu gauche */
+        .player-spot:nth-child(7) { bottom: 10%; left: 10%; }                                 /* Coin bas gauche */
+
+        .mes-cartes-container {
+            position: fixed;
+            bottom: 20px;
+            left: 78%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .tour-indicator {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #4CAF50;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 18px;
+            z-index: 100;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 12px;
+            z-index: 900;
+            width: auto;
+            max-width: 90%;
+        }
+
+        button {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            font-size: 18px;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .login-section {
+            text-align: center;
+            margin-top: 100px;
         }
 
         .phase-indicator {
@@ -96,89 +257,17 @@
             font-size: 18px;
         }
 
-        .controls {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-            justify-content: center;
-        }
-
-        button {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            background-color: #4CAF50;
-            color: white;
-            cursor: pointer;
-            font-size: 16px;
-        }
-
-        button:hover {
-            background-color: #45a049;
-        }
-
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-
-        input {
-            padding: 10px;
-            margin: 5px;
-            border-radius: 5px;
-            border: none;
-            font-size: 16px;
-        }
-
-        .login-section {
-            text-align: center;
-            margin-top: 100px;
-        }
-
-        .pot {
-            font-size: 24px;
-            margin-bottom: 20px;
-        }
-
-        .mes-cartes-container {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 15px;
-            border-radius: 10px;
-            text-align: center;
-        }
-
-        .tour-indicator {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: #4CAF50;
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-size: 18px;
-            z-index: 100;
-        }
-
-        /* Positions des joueurs */
-        .player-spot:nth-child(1) { bottom: 10px; left: 50%; transform: translateX(-50%); }
-        .player-spot:nth-child(2) { bottom: 25%; right: 10px; }
-        .player-spot:nth-child(3) { top: 25%; right: 10px; }
-        .player-spot:nth-child(4) { top: 10px; left: 50%; transform: translateX(-50%); }
-        .player-spot:nth-child(5) { top: 25%; left: 10px; }
-        .player-spot:nth-child(6) { bottom: 25%; left: 10px; }
-
         .notifications-container {
             position: fixed;
-            bottom: 20px;
+            bottom: 80px;
             right: 20px;
             z-index: 1000;
             display: flex;
             flex-direction: column;
             gap: 10px;
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+            pointer-events: none;
         }
 
         .notification {
@@ -189,6 +278,7 @@
             margin-top: 10px;
             animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-out 4.5s forwards;
             max-width: 300px;
+            pointer-events: auto;
         }
 
         .notification.success {
@@ -259,6 +349,24 @@
             max-width: 600px;
             border-radius: 10px;
             color: white;
+            max-height: 80vh;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #4CAF50 rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-content::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .modal-content::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+        }
+
+        .modal-content::-webkit-scrollbar-thumb {
+            background-color: #4CAF50;
+            border-radius: 4px;
         }
 
         .close-modal {
@@ -283,59 +391,212 @@
 
         .lobby-section {
             text-align: center;
-            margin-top: 50px;
-            color: white;
+            margin: 20px auto;
+            max-width: 800px;
+            padding: 20px;
+            background-color: rgba(0, 0, 0, 0.4);
+            border-radius: 20px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+        }
+
+        .lobby-section h1 {
+            font-size: 3em;
+            margin-bottom: 40px;
+            color: #4CAF50;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
         }
 
         .create-table-section {
             margin-bottom: 40px;
-            padding: 20px;
+            padding: 30px;
+            background-color: rgba(45, 87, 44, 0.4);
+            border-radius: 15px;
+            border: 1px solid rgba(76, 175, 80, 0.3);
+        }
+
+        .create-table-section h2 {
+            color: #fff;
+            margin-bottom: 25px;
+            font-size: 1.8em;
+        }
+
+        .create-table-section input {
+            padding: 12px 20px;
+            margin: 0 10px;
+            border-radius: 8px;
+            border: 2px solid rgba(76, 175, 80, 0.5);
             background-color: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
+            color: white;
+            font-size: 16px;
+            width: 200px;
+            transition: all 0.3s ease;
+        }
+
+        .create-table-section input:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+        }
+
+        .create-table-section button {
+            margin-left: 10px;
+            background-color: #4CAF50;
+            padding: 12px 25px;
+            font-size: 16px;
         }
 
         .tables-list {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            max-width: 600px;
-            margin: 0 auto;
+            background-color: rgba(0, 0, 0, 0.3);
+            padding: 30px;
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-height: calc(100vh - 350px);
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #4CAF50 rgba(0, 0, 0, 0.2);
+        }
+
+        .tables-list::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .tables-list::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+        }
+
+        .tables-list::-webkit-scrollbar-thumb {
+            background-color: #4CAF50;
+            border-radius: 4px;
+        }
+
+        .tables-list h2 {
+            color: #fff;
+            margin-bottom: 25px;
+            font-size: 1.8em;
         }
 
         .table-item {
-            background-color: rgba(45, 87, 44, 0.5);
-            padding: 15px;
-            border-radius: 8px;
+            background-color: rgba(45, 87, 44, 0.3);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 15px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            border: 1px solid rgba(76, 175, 80, 0.2);
             transition: all 0.3s ease;
         }
 
         .table-item:hover {
-            background-color: rgba(45, 87, 44, 0.8);
+            background-color: rgba(45, 87, 44, 0.5);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
         }
 
         .table-info {
             text-align: left;
+            flex-grow: 1;
+        }
+
+        .table-info > div:first-child {
+            font-size: 1.2em;
+            color: #4CAF50;
+            margin-bottom: 5px;
         }
 
         .table-players {
             font-size: 0.9em;
-            color: #aaa;
-            margin-top: 5px;
+            color: #bbb;
         }
 
         .join-button {
             background-color: #2196F3;
-            padding: 8px 15px;
-            border-radius: 4px;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
             cursor: pointer;
-            transition: background-color 0.3s ease;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            font-weight: bold;
+            letter-spacing: 1px;
         }
 
         .join-button:hover {
             background-color: #1976D2;
+            transform: translateY(-2px);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .notification.warning {
+            border-left: 4px solid #ff9800;
+            background-color: rgba(255, 152, 0, 0.1);
+        }
+
+        /* Style pour le croupier */
+        .croupier {
+            position: absolute;
+            top: -80px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 80px;
+            background-color: #1a1a1a;
+            border-radius: 50%;
+            border: 3px solid #4a3527;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .croupier::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 50%;
+            bottom: 0;
+            background-color: #4CAF50;
+            border-top: 2px solid #45a049;
+        }
+
+        .croupier::before {
+            content: '👔';
+            font-size: 40px;
+            position: relative;
+            top: 5px;
+            z-index: 1;
+        }
+
+        /* Style pour le bouton quitter */
+        .quit-button {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #f44336;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            text-transform: uppercase;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .quit-button:hover {
+            background-color: #d32f2f;
+            transform: translateY(-2px);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
         }
     </style>
 </head>
@@ -345,8 +606,10 @@
             <h1>Poker Multijoueurs</h1>
             <div class="create-table-section">
                 <h2>Créer une nouvelle table</h2>
-                <input type="text" id="username" placeholder="Votre nom">
-                <button onclick="creerTable()">Créer une table</button>
+                <div class="input-group">
+                    <input type="text" id="username" placeholder="Votre nom" maxlength="20">
+                    <button onclick="creerTable()">Créer une table</button>
+                </div>
             </div>
             
             <div class="tables-list" id="tables-list">
@@ -356,10 +619,12 @@
         </div>
 
         <div id="game-section" style="display: none;">
+            <button class="quit-button" onclick="quitterTable()">Quitter la table</button>
             <div id="tour-indicator" class="tour-indicator" style="display: none;">
                 En attente des joueurs...
             </div>
             <div class="table">
+                <div class="croupier"></div>
                 <div class="phase-indicator" id="phase">En attente</div>
                 <div class="board">
                     <div class="pot" id="pot">Pot: 0€</div>
@@ -507,6 +772,11 @@
                 return;
             }
             
+            if (tables[tableId] && Object.keys(tables[tableId].joueurs).length >= 7) {
+                showNotification('La table est pleine (7 joueurs maximum)', 'error');
+                return;
+            }
+            
             currentUser = username;
             currentRoom = tableId;
             
@@ -520,24 +790,26 @@
             const tablesList = document.getElementById('tables-list');
             let html = '<h2>Tables disponibles</h2>';
             
-            Object.entries(tables).forEach(([tableId, tableInfo]) => {
-                const joueurs = Object.keys(tableInfo.joueurs).join(', ');
-                const nbJoueurs = Object.keys(tableInfo.joueurs).length;
-                html += `
-                    <div class="table-item">
-                        <div class="table-info">
-                            <div>Table #${tableId.slice(-4)}</div>
-                            <div class="table-players">Joueurs (${nbJoueurs}/6): ${joueurs}</div>
-                        </div>
-                        <button class="join-button" onclick="rejoindreTable('${tableId}')">
-                            Rejoindre
-                        </button>
-                    </div>
-                `;
-            });
-            
             if (Object.keys(tables).length === 0) {
                 html += '<div style="text-align: center; margin-top: 20px; color: #666;">Aucune table disponible</div>';
+            } else {
+                Object.entries(tables).forEach(([tableId, tableInfo]) => {
+                    if (tableInfo.joueurs && Object.keys(tableInfo.joueurs).length > 0) {
+                        const joueurs = Object.keys(tableInfo.joueurs).join(', ');
+                        const nbJoueurs = Object.keys(tableInfo.joueurs).length;
+                        html += `
+                            <div class="table-item">
+                                <div class="table-info">
+                                    <div>Table #${tableId.slice(-4)}</div>
+                                    <div class="table-players">Joueurs (${nbJoueurs}/7): ${joueurs}</div>
+                                </div>
+                                <button class="join-button" onclick="rejoindreTable('${tableId}')">
+                                    Rejoindre
+                                </button>
+                            </div>
+                        `;
+                    }
+                });
             }
             
             tablesList.innerHTML = html;
@@ -547,6 +819,15 @@
         socket.on('update_tables', (data) => {
             tables = data.tables;
             updateTablesList(tables);
+            
+            // Si notre table n'existe plus, retourner au lobby
+            if (currentRoom && !tables[currentRoom]) {
+                document.getElementById('game-section').style.display = 'none';
+                document.getElementById('login-section').style.display = 'block';
+                currentRoom = '';
+                currentUser = '';
+                showNotification('La table a été fermée', 'warning');
+            }
         });
 
         socket.on('table_creee', (data) => {
@@ -694,36 +975,60 @@
             const joueursDiv = document.getElementById('joueurs');
             joueursDiv.innerHTML = '';
             
-            // Créer un tableau pour ordonner les joueurs
+            let joueursArray = Object.entries(joueurs);
+            const currentPlayerIndex = joueursArray.findIndex(([username]) => username === currentUser);
+            
+            if (currentPlayerIndex !== -1) {
+                joueursArray = [
+                    ...joueursArray.slice(currentPlayerIndex),
+                    ...joueursArray.slice(0, currentPlayerIndex)
+                ];
+            }
+            
             const positions = [
-                { bottom: '10px', left: '50%', transform: 'translateX(-50%)' },
-                { bottom: '25%', right: '10px' },
-                { top: '25%', right: '10px' },
-                { top: '10px', left: '50%', transform: 'translateX(-50%)' },
-                { top: '25%', left: '10px' },
-                { bottom: '25%', left: '10px' }
+                { bottom: '2%', left: '50%', transform: 'translateX(-50%)' },    /* Bas centre */
+                { bottom: '10%', right: '10%' },                                 /* Coin bas droite */
+                { top: '45%', right: '2%' },                                     /* Milieu droite */
+                { top: '15%', right: '15%' },                                    /* Haut droite */
+                { top: '15%', left: '15%' },                                     /* Haut gauche */
+                { top: '45%', left: '2%' },                                      /* Milieu gauche */
+                { bottom: '10%', left: '10%' }                                   /* Coin bas gauche */
             ];
             
-            Object.entries(joueurs).forEach(([username, data], index) => {
+            joueursArray.forEach(([username, data], index) => {
+                if (index >= positions.length) return;
+                
                 const spot = document.createElement('div');
                 spot.className = `player-spot${username === currentUser ? ' active' : ''}`;
                 spot.setAttribute('data-username', username);
                 
-                // Appliquer le style de position
-                const position = positions[index];
-                Object.assign(spot.style, position);
+                Object.assign(spot.style, positions[index]);
                 
-                // Afficher la mise du tour si elle existe
                 let miseHtml = '';
                 if (data.mise_tour > 0) {
                     miseHtml = `<div class="mise">${data.mise_tour}€</div>`;
                 }
                 
+                let statusHtml = '';
+                if (!data.en_jeu) {
+                    statusHtml = '<div>(Couché)</div>';
+                }
+
+                // Ajouter les indicateurs de dealer et big blind
+                let indicatorsHtml = '';
+                if (data.is_dealer) {
+                    indicatorsHtml += '<div class="player-indicator dealer-button">D</div>';
+                }
+                if (data.is_big_blind) {
+                    indicatorsHtml += '<div class="player-indicator big-blind-button">BB</div>';
+                }
+                
                 spot.innerHTML = `
                     ${miseHtml}
+                    ${indicatorsHtml}
                     <div>${username}</div>
                     <div>${data.jetons}€</div>
-                    ${!data.en_jeu ? '<div>(Couché)</div>' : ''}
+                    ${statusHtml}
                 `;
                 joueursDiv.appendChild(spot);
             });
@@ -823,14 +1128,54 @@
         }
 
         // Ajouter un gestionnaire pour la fermeture de la fenêtre
-        window.addEventListener('beforeunload', () => {
+        window.addEventListener('beforeunload', (event) => {
             if (currentUser && currentRoom) {
+                // Forcer l'envoi synchrone avant la fermeture
                 socket.emit('quitter_partie', {
                     username: currentUser,
                     room: currentRoom
                 });
+                socket.disconnect();
             }
         });
+
+        // Mise à jour de la gestion des déconnexions
+        socket.on('joueur_parti', (data) => {
+            showNotification(`${data.username} a quitté la partie`, 'warning');
+            
+            // Retirer visuellement le joueur de la table
+            const playerSpot = document.querySelector(`.player-spot[data-username="${data.username}"]`);
+            if (playerSpot) {
+                playerSpot.remove();
+            }
+            
+            // Si c'était le dernier joueur, retourner au lobby
+            if (currentRoom && (!tables[currentRoom] || !tables[currentRoom].joueurs || Object.keys(tables[currentRoom].joueurs).length === 0)) {
+                document.getElementById('game-section').style.display = 'none';
+                document.getElementById('login-section').style.display = 'block';
+                currentRoom = '';
+                currentUser = '';
+            }
+        });
+
+        function quitterTable() {
+            if (confirm('Êtes-vous sûr de vouloir quitter la table ?')) {
+                socket.emit('quitter_partie', {
+                    username: currentUser,
+                    room: currentRoom
+                });
+                
+                // Retour au lobby
+                document.getElementById('game-section').style.display = 'none';
+                document.getElementById('login-section').style.display = 'block';
+                
+                // Réinitialisation des variables
+                currentRoom = '';
+                currentUser = '';
+                
+                showNotification('Vous avez quitté la table', 'warning');
+            }
+        }
 
         // Fonctions pour le modal
         function ouvrirModal() {
@@ -883,6 +1228,17 @@
                 modal.style.display = 'none';
             }
         }
+
+        // Gestion de la déconnexion des joueurs
+        socket.on('joueur_deconnecte', (data) => {
+            showNotification(data.message, 'warning');
+            // Mettre à jour visuellement le joueur déconnecté
+            const playerSpot = document.querySelector(`.player-spot[data-username="${data.username}"]`);
+            if (playerSpot) {
+                playerSpot.style.opacity = '0.5';
+                playerSpot.innerHTML += '<div>(Déconnecté)</div>';
+            }
+        });
     </script>
 </body>
 </html> 
