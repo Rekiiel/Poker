@@ -104,12 +104,46 @@
             text-align: center;
             transition: all 0.3s ease;
             z-index: 10;
+            border: 2px solid transparent;
         }
 
         .player-spot.active {
             box-shadow: 0 0 25px #ffd700;
             transform: scale(1.05);
             z-index: 100;
+        }
+
+        .player-spot[data-active="true"] {
+            animation: activePlayer 2s infinite;
+            border: 2px solid #4CAF50;
+            background: linear-gradient(
+                rgba(0, 0, 0, 0.8),
+                rgba(0, 0, 0, 0.8)
+            );
+            box-shadow: 
+                0 0 15px rgba(76, 175, 80, 0.3),
+                inset 0 0 15px rgba(76, 175, 80, 0.3);
+        }
+
+        @keyframes activePlayer {
+            0% {
+                border-color: #4CAF50;
+                box-shadow: 
+                    0 0 15px rgba(76, 175, 80, 0.3),
+                    inset 0 0 15px rgba(76, 175, 80, 0.3);
+            }
+            50% {
+                border-color: #45a049;
+                box-shadow: 
+                    0 0 25px rgba(76, 175, 80, 0.5),
+                    inset 0 0 25px rgba(76, 175, 80, 0.5);
+            }
+            100% {
+                border-color: #4CAF50;
+                box-shadow: 
+                    0 0 15px rgba(76, 175, 80, 0.3),
+                    inset 0 0 15px rgba(76, 175, 80, 0.3);
+            }
         }
 
         .player-indicator {
@@ -123,6 +157,11 @@
             background-repeat: no-repeat;
             background-position: center;
             z-index: 101;
+        }
+
+        /* Supprimer l'ancien style du jeton de tour */
+        .turn-token {
+            display: none;
         }
 
         .dealer-button {
@@ -259,62 +298,51 @@
 
         .notifications-container {
             position: fixed;
-            bottom: 80px;
+            bottom: 120px;
             right: 20px;
             z-index: 1000;
             display: flex;
-            flex-direction: column;
-            gap: 10px;
-            max-height: calc(100vh - 200px);
-            overflow-y: auto;
+            flex-direction: column-reverse;
+            gap: 8px;
+            max-height: 60vh;
             pointer-events: none;
+            width: 300px;
         }
 
         .notification {
-            background-color: rgba(0, 0, 0, 0.8);
+            background-color: rgba(0, 0, 0, 0.9);
             color: white;
-            padding: 15px 20px;
-            border-radius: 5px;
-            margin-top: 10px;
-            animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-out 4.5s forwards;
-            max-width: 300px;
+            padding: 12px 20px;
+            border-radius: 8px;
             pointer-events: auto;
+            max-width: 100%;
+            margin-bottom: 4px;
+            font-size: 14px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            transform: translateX(120%);
+            transition: transform 0.3s ease-out;
+            opacity: 0;
         }
 
-        .notification.success {
-            border-left: 4px solid #4CAF50;
+        .notification.visible {
+            transform: translateX(0);
+            opacity: 1;
         }
 
-        .notification.error {
-            border-left: 4px solid #f44336;
+        .notification.success { 
+            border-left: 4px solid #4CAF50; 
         }
-
-        @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
+        .notification.error { 
+            border-left: 4px solid #f44336; 
         }
-
-        @keyframes fadeOut {
-            from {
-                opacity: 1;
-            }
-            to {
-                opacity: 0;
-            }
+        .notification.action { 
+            border-left: 4px solid #2196F3; 
         }
-
-        .notification.action {
-            background-color: rgba(33, 150, 243, 0.1);
+        .notification.phase { 
+            border-left: 4px solid #FF9800; 
         }
-        
-        .notification.phase {
-            background-color: rgba(255, 152, 0, 0.1);
+        .notification.warning { 
+            border-left: 4px solid #ff9800; 
         }
 
         .historique-button {
@@ -598,6 +626,125 @@
             transform: translateY(-2px);
             box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
         }
+
+        .game-controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .action-button {
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        .action-button:hover {
+            background: #45a049;
+        }
+
+        .bet-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .bet-input {
+            padding: 8px;
+            width: 100px;
+            border: 2px solid #4CAF50;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        .quick-bet-buttons {
+            display: flex;
+            gap: 5px;
+        }
+
+        .quick-bet {
+            padding: 8px 12px;
+            font-size: 14px;
+            border: none;
+            border-radius: 5px;
+            background: #2196F3;
+            color: white;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .quick-bet:hover {
+            background: #1976D2;
+        }
+
+        #foldButton {
+            background: #f44336;
+        }
+
+        #foldButton:hover {
+            background: #d32f2f;
+        }
+
+        .player-spot .ready-status {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #4CAF50;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .player-spot .ready-status.ready {
+            opacity: 1;
+        }
+
+        .ready-button {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+
+        .ready-button.not-ready {
+            background-color: #f44336;
+        }
+
+        .ready-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+        }
     </style>
 </head>
 <body>
@@ -619,6 +766,7 @@
         </div>
 
         <div id="game-section" style="display: none;">
+            <button id="readyButton" class="ready-button not-ready" onclick="toggleReady()">PAS PRÊT</button>
             <button class="quit-button" onclick="quitterTable()">Quitter la table</button>
             <div id="tour-indicator" class="tour-indicator" style="display: none;">
                 En attente des joueurs...
@@ -639,12 +787,23 @@
                 <div id="ma-combinaison" style="margin-top: 10px; font-size: 18px; color: #4CAF50; font-weight: bold;"></div>
             </div>
 
-            <div class="controls">
-                <button onclick="demarrerPartie()" id="btn-demarrer">Démarrer la partie</button>
-                <button onclick="suivre()" id="btn-suivre" disabled>Suivre</button>
-                <button onclick="miser()" id="btn-miser" disabled>Miser</button>
-                <input type="number" id="mise-montant" placeholder="Montant" min="0" step="10">
-                <button onclick="seCoucher()" id="btn-coucher" disabled>Se coucher</button>
+            <div class="game-controls">
+                <button id="startGameButton" class="action-button" style="position: absolute; top: 10px; right: 10px; display: none;">DÉMARRER LA PARTIE</button>
+                <div class="action-buttons">
+                    <button id="checkButton" class="action-button">CHECK</button>
+                    <button id="callButton" class="action-button">SUIVRE</button>
+                    <button id="betButton" class="action-button">MISER</button>
+                    <button id="foldButton" class="action-button">SE COUCHER</button>
+                </div>
+                <div class="bet-controls">
+                    <input type="number" id="betAmount" class="bet-input" placeholder="Montant">
+                    <div class="quick-bet-buttons">
+                        <button class="quick-bet" data-multiplier="0.5">½ POT</button>
+                        <button class="quick-bet" data-multiplier="0.75">¾ POT</button>
+                        <button class="quick-bet" data-multiplier="1">POT</button>
+                        <button class="quick-bet" data-multiplier="2">2× POT</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -680,6 +839,9 @@
         let isConnected = true;  // Nouvel état pour suivre la connexion
         let derniereMain = null;  // Pour stocker la dernière main
         let tables = {};  // Pour stocker les informations des tables
+        let currentPot = 0;
+        let canCheckAction = false;
+        let isReady = false;
 
         // Gestion de la connexion/déconnexion
         socket.on('connect', () => {
@@ -834,6 +996,13 @@
             showNotification('Table créée avec succès', 'success');
             document.getElementById('login-section').style.display = 'none';
             document.getElementById('game-section').style.display = 'block';
+            
+            // Réinitialiser et afficher le bouton prêt
+            const readyButton = document.getElementById('readyButton');
+            readyButton.style.display = 'block';
+            readyButton.textContent = 'PAS PRÊT';
+            readyButton.classList.add('not-ready');
+            isReady = false;
         });
 
         function demarrerPartie() {
@@ -891,6 +1060,13 @@
         socket.on('joueur_rejoint', (data) => {
             showNotification(`${data.username} a rejoint la partie`, 'success');
             updateJoueurs(data.joueurs);
+            
+            // Réinitialiser et afficher le bouton prêt
+            const readyButton = document.getElementById('readyButton');
+            readyButton.style.display = 'block';
+            readyButton.textContent = 'PAS PRÊT';
+            readyButton.classList.add('not-ready');
+            isReady = false;
         });
 
         socket.on('activer_demarrage', () => {
@@ -901,7 +1077,21 @@
         });
 
         socket.on('partie_demarree', () => {
-            document.getElementById('btn-demarrer').style.display = 'none';
+            // Cacher le bouton prêt et réinitialiser son état
+            const readyButton = document.getElementById('readyButton');
+            readyButton.style.display = 'none';
+            readyButton.textContent = 'PAS PRÊT';
+            readyButton.classList.add('not-ready');
+            isReady = false;
+
+            // Cacher tous les indicateurs "PRÊT"
+            document.querySelectorAll('.ready-status').forEach(status => {
+                status.classList.remove('ready');
+            });
+
+            // Cacher le bouton démarrer
+            document.getElementById('startGameButton').style.display = 'none';
+
             showNotification('La partie commence !', 'success');
         });
 
@@ -931,18 +1121,42 @@
             const tourIndicator = document.getElementById('tour-indicator');
             tourIndicator.style.display = 'block';
             if (data.tour_actuel === currentUser) {
-                tourIndicator.textContent = "C'est à votre tour de jouer!";
+                tourIndicator.textContent = "C'est à votre tour de jouer !";
                 tourIndicator.style.backgroundColor = '#4CAF50';
             } else if (data.tour_actuel) {
-                tourIndicator.textContent = `C'est au tour de ${data.tour_actuel}`;
+                tourIndicator.textContent = `Au tour de ${data.tour_actuel}`;
                 tourIndicator.style.backgroundColor = '#666';
             } else {
                 tourIndicator.textContent = 'En attente des joueurs...';
             }
             
             monTour = data.tour_actuel === currentUser;
-            updateControls();
-            updateJoueurs(data.joueurs);
+            
+            // Activer/désactiver les boutons selon l'état du jeu
+            const buttons = document.querySelectorAll('.action-button');
+            buttons.forEach(button => {
+                button.disabled = !monTour;
+            });
+            
+            document.getElementById('betAmount').disabled = !monTour;
+            document.querySelectorAll('.quick-bet').forEach(button => {
+                button.disabled = !monTour;
+            });
+            
+            if (data.mise_actuelle === 0) {
+                document.getElementById('checkButton').style.display = 'inline-block';
+                document.getElementById('callButton').style.display = 'none';
+            } else {
+                document.getElementById('checkButton').style.display = 'none';
+                document.getElementById('callButton').style.display = 'inline-block';
+            }
+            
+            // Mettre à jour les joueurs avec le tour actuel
+            const joueursWithTurn = { ...data.joueurs };
+            if (joueursWithTurn[data.tour_actuel]) {
+                joueursWithTurn[data.tour_actuel].tour_actuel = data.tour_actuel;
+            }
+            updateJoueurs(joueursWithTurn);
             
             // Mise à jour des cartes communes
             if (data.cartes_communes) {
@@ -1002,6 +1216,11 @@
                 spot.className = `player-spot${username === currentUser ? ' active' : ''}`;
                 spot.setAttribute('data-username', username);
                 
+                // Ajouter l'attribut data-active si c'est le tour du joueur
+                if (data.tour_actuel === username) {
+                    spot.setAttribute('data-active', 'true');
+                }
+                
                 Object.assign(spot.style, positions[index]);
                 
                 let miseHtml = '';
@@ -1014,22 +1233,25 @@
                     statusHtml = '<div>(Couché)</div>';
                 }
 
-                // Ajouter les indicateurs de dealer et big blind
-                let indicatorsHtml = '';
-                if (data.is_dealer) {
-                    indicatorsHtml += '<div class="player-indicator dealer-button">D</div>';
-                }
-                if (data.is_big_blind) {
-                    indicatorsHtml += '<div class="player-indicator big-blind-button">BB</div>';
-                }
+                let readyStatus = document.createElement('div');
+                readyStatus.className = 'ready-status';
+                readyStatus.textContent = 'PRÊT';
                 
                 spot.innerHTML = `
                     ${miseHtml}
-                    ${indicatorsHtml}
+                    <div class="ready-status">PRÊT</div>
                     <div>${username}</div>
                     <div>${data.jetons}€</div>
                     ${statusHtml}
                 `;
+                
+                if (data.is_dealer) {
+                    spot.innerHTML += '<div class="player-indicator dealer-button">D</div>';
+                }
+                if (data.is_big_blind) {
+                    spot.innerHTML += '<div class="player-indicator big-blind-button">BB</div>';
+                }
+                
                 joueursDiv.appendChild(spot);
             });
         }
@@ -1074,6 +1296,10 @@
         });
 
         socket.on('erreur', (data) => {
+            // Éviter d'afficher "Ce n'est pas votre tour" si ce n'est effectivement pas notre tour
+            if (data.message === 'Ce n\'est pas votre tour' && !monTour) {
+                return;
+            }
             showNotification(data.message, 'error');
         });
 
@@ -1106,25 +1332,69 @@
         });
 
         // Fonction de notification améliorée
+        let lastNotification = '';
+        let lastNotificationTime = 0;
+
         function showNotification(message, type = 'success') {
-            const notifContainer = document.getElementById('notifications');
+            // Éviter les doublons rapprochés (moins de 1 seconde)
+            const now = Date.now();
+            if (message === lastNotification && now - lastNotificationTime < 1000) {
+                return;
+            }
+            
+            lastNotification = message;
+            lastNotificationTime = now;
+
+            const container = document.getElementById('notifications');
+            
+            // Créer la notification
             const notification = document.createElement('div');
             notification.className = `notification ${type}`;
             notification.textContent = message;
             
-            // Ajouter des styles spécifiques selon le type
-            if (type === 'action') {
-                notification.style.borderLeft = '4px solid #2196F3';  // Bleu pour les actions
-            } else if (type === 'phase') {
-                notification.style.borderLeft = '4px solid #FF9800';  // Orange pour les phases
+            // Gérer le nombre maximum de notifications
+            const existingNotifications = container.children;
+            if (existingNotifications.length >= 4) {
+                container.removeChild(existingNotifications[0]);
             }
             
-            notifContainer.appendChild(notification);
+            // Ajouter la notification au conteneur
+            container.appendChild(notification);
             
-            // Supprimer la notification après 5 secondes
+            // Forcer un reflow pour que la transition fonctionne
+            notification.offsetHeight;
+            
+            // Rendre la notification visible
+            requestAnimationFrame(() => {
+                notification.classList.add('visible');
+            });
+            
+            // Définir la durée d'affichage selon le type
+            let duration = 3000; // Par défaut
+            switch (type) {
+                case 'error':
+                    duration = 5000;
+                    break;
+                case 'action':
+                    duration = 2000;
+                    break;
+                case 'phase':
+                    duration = 4000;
+                    break;
+            }
+            
+            // Supprimer la notification après la durée spécifiée
             setTimeout(() => {
-                notification.remove();
-            }, 5000);
+                notification.classList.remove('visible');
+                notification.style.opacity = '0';
+                
+                // Attendre la fin de l'animation avant de supprimer
+                setTimeout(() => {
+                    if (notification.parentNode === container) {
+                        container.removeChild(notification);
+                    }
+                }, 300);
+            }, duration);
         }
 
         // Ajouter un gestionnaire pour la fermeture de la fenêtre
@@ -1160,18 +1430,24 @@
 
         function quitterTable() {
             if (confirm('Êtes-vous sûr de vouloir quitter la table ?')) {
+                if (isReady) {
+                    socket.emit('joueur_pas_pret', {
+                        username: currentUser,
+                        room: currentRoom
+                    });
+                }
+                
                 socket.emit('quitter_partie', {
                     username: currentUser,
                     room: currentRoom
                 });
                 
-                // Retour au lobby
                 document.getElementById('game-section').style.display = 'none';
                 document.getElementById('login-section').style.display = 'block';
                 
-                // Réinitialisation des variables
                 currentRoom = '';
                 currentUser = '';
+                isReady = false;
                 
                 showNotification('Vous avez quitté la table', 'warning');
             }
@@ -1238,6 +1514,163 @@
                 playerSpot.style.opacity = '0.5';
                 playerSpot.innerHTML += '<div>(Déconnecté)</div>';
             }
+        });
+
+        document.querySelectorAll('.quick-bet').forEach(button => {
+            button.addEventListener('click', () => {
+                const multiplier = parseFloat(button.dataset.multiplier);
+                const currentPot = getCurrentPot(); // Vous devez implémenter cette fonction
+                const suggestedBet = Math.floor(currentPot * multiplier);
+                document.getElementById('betAmount').value = suggestedBet;
+            });
+        });
+
+        document.getElementById('checkButton').addEventListener('click', () => {
+            if (canCheck()) { // Vous devez implémenter cette fonction
+                socket.emit('action_joueur', {
+                    action: 'check',
+                    room: currentRoom,
+                    username: currentUser
+                });
+            }
+        });
+
+        function getCurrentPot() {
+            return currentPot;
+        }
+
+        function canCheck() {
+            return canCheckAction;
+        }
+
+        socket.on('update_game_state', function(data) {
+            currentPot = data.pot;
+            canCheckAction = data.mise_actuelle === 0;
+            
+            // Activer/désactiver les boutons selon l'état du jeu
+            const isCurrentPlayer = data.tour_actuel === currentUser;
+            document.getElementById('checkButton').disabled = !isCurrentPlayer || !canCheckAction;
+            document.getElementById('callButton').disabled = !isCurrentPlayer;
+            document.getElementById('betButton').disabled = !isCurrentPlayer;
+            document.getElementById('foldButton').disabled = !isCurrentPlayer;
+            
+            // Mettre à jour l'interface avec le pot actuel
+            updatePotDisplay(data.pot);
+        });
+
+        function updatePotDisplay(pot) {
+            currentPot = pot;
+            // Mettre à jour l'affichage du pot si vous avez un élément pour ça
+        }
+
+        // Gestionnaires d'événements pour les boutons d'action
+        document.getElementById('betButton').addEventListener('click', () => {
+            const montant = parseInt(document.getElementById('betAmount').value);
+            if (montant > 0) {
+                socket.emit('action_joueur', {
+                    action: 'mise',
+                    montant: montant,
+                    room: currentRoom,
+                    username: currentUser
+                });
+            }
+        });
+
+        document.getElementById('callButton').addEventListener('click', () => {
+            socket.emit('action_joueur', {
+                action: 'suivre',
+                room: currentRoom,
+                username: currentUser
+            });
+        });
+
+        document.getElementById('foldButton').addEventListener('click', () => {
+            socket.emit('action_joueur', {
+                action: 'coucher',
+                room: currentRoom,
+                username: currentUser
+            });
+        });
+
+        document.getElementById('checkButton').addEventListener('click', () => {
+            socket.emit('action_joueur', {
+                action: 'check',
+                room: currentRoom,
+                username: currentUser
+            });
+        });
+
+        // Gestionnaire pour le bouton démarrer
+        document.getElementById('startGameButton').addEventListener('click', () => {
+            socket.emit('demarrer_partie', {
+                room: currentRoom
+            });
+        });
+
+        socket.on('activer_demarrage', () => {
+            document.getElementById('startGameButton').style.display = 'block';
+        });
+
+        socket.on('partie_demarree', () => {
+            // Cacher le bouton prêt et réinitialiser son état
+            const readyButton = document.getElementById('readyButton');
+            readyButton.style.display = 'none';
+            readyButton.textContent = 'PAS PRÊT';
+            readyButton.classList.add('not-ready');
+            isReady = false;
+
+            // Cacher tous les indicateurs "PRÊT"
+            document.querySelectorAll('.ready-status').forEach(status => {
+                status.classList.remove('ready');
+            });
+
+            // Cacher le bouton démarrer
+            document.getElementById('startGameButton').style.display = 'none';
+
+            showNotification('La partie commence !', 'success');
+        });
+
+        function toggleReady() {
+            const button = document.getElementById('readyButton');
+            isReady = !isReady;
+            
+            if (isReady) {
+                button.textContent = 'PRÊT';
+                button.classList.remove('not-ready');
+                socket.emit('joueur_pret', {
+                    username: currentUser,
+                    room: currentRoom
+                });
+            } else {
+                button.textContent = 'PAS PRÊT';
+                button.classList.add('not-ready');
+                socket.emit('joueur_pas_pret', {
+                    username: currentUser,
+                    room: currentRoom
+                });
+            }
+        }
+
+        socket.on('update_joueurs_prets', (data) => {
+            const joueursPrets = new Set(data.joueurs_prets);
+            
+            // Mettre à jour le statut de chaque joueur
+            document.querySelectorAll('.player-spot').forEach(spot => {
+                const username = spot.getAttribute('data-username');
+                const readyStatus = spot.querySelector('.ready-status') || document.createElement('div');
+                readyStatus.className = 'ready-status';
+                readyStatus.textContent = 'PRÊT';
+                
+                if (!spot.querySelector('.ready-status')) {
+                    spot.appendChild(readyStatus);
+                }
+                
+                if (joueursPrets.has(username)) {
+                    readyStatus.classList.add('ready');
+                } else {
+                    readyStatus.classList.remove('ready');
+                }
+            });
         });
     </script>
 </body>

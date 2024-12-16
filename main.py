@@ -35,7 +35,7 @@ class GestionTour:
         
     def joueur_actuel(self):
         """Retourne le joueur actuel"""
-        if not self.ordre_joueurs:
+        if not self.ordre_joueurs or self.index_actuel >= len(self.ordre_joueurs):
             return None
         return self.ordre_joueurs[self.index_actuel]
     
@@ -52,13 +52,13 @@ class GestionTour:
         
         # Chercher le prochain joueur actif
         tentatives = 0
-        while not self.joueurs[self.ordre_joueurs[self.index_actuel]]['en_jeu']:
+        while tentatives < len(self.ordre_joueurs):
+            if self.ordre_joueurs[self.index_actuel] in self.joueurs and self.joueurs[self.ordre_joueurs[self.index_actuel]]['en_jeu']:
+                return self.ordre_joueurs[self.index_actuel]
             self.index_actuel = (self.index_actuel + 1) % len(self.ordre_joueurs)
             tentatives += 1
-            if tentatives >= len(self.ordre_joueurs):
-                return None
             
-        return self.ordre_joueurs[self.index_actuel]
+        return None
     
     def verifier_tour_complet(self, mises_tour, mise_actuelle):
         """Vérifie si le tour est complet (tous les joueurs ont misé le même montant)"""
@@ -100,6 +100,7 @@ class Partie:
         self.mises_tour = {}
         self.gestion_tour = None
         self.deconnexions_temporaires = {}  # Pour suivre les déconnexions temporaires
+        self.joueurs_prets = set()  # Pour suivre les joueurs prêts
         self.initialiser_deck()
 
     def initialiser_deck(self):
@@ -113,30 +114,62 @@ class Partie:
         self.pot = 0
         self.cartes_communes = []
         self.mise_actuelle = self.grande_blind
+        self.joueurs_prets.clear()  # Réinitialiser les joueurs prêts
+        
+        # Vérifier et éliminer les joueurs sans jetons
+        joueurs_elimines = []
+        for username, joueur in self.joueurs.items():
+            if joueur['jetons'] <= 0:
+                joueur['en_jeu'] = False
+                joueurs_elimines.append(username)
+                socketio.emit('notification', {
+                    'message': f'{username} n\'a plus de jetons et ne peut pas participer à cette manche',
+                    'type': 'error'
+                }, room=self.room_id)
+        
+        # S'il ne reste qu'un joueur avec des jetons, terminer la partie
+        joueurs_avec_jetons = [u for u, j in self.joueurs.items() if j['jetons'] > 0]
+        if len(joueurs_avec_jetons) <= 1:
+            if joueurs_avec_jetons:
+                socketio.emit('notification', {
+                    'message': f'{joueurs_avec_jetons[0]} a gagné la partie !',
+                    'type': 'success'
+                }, room=self.room_id)
+            return
         
         # Distribution des cartes
         joueurs_liste = list(self.joueurs.keys())
         for username in joueurs_liste:
-            self.joueurs[username]['cartes'] = [self.deck.pop().to_dict() for _ in range(2)]
-            self.joueurs[username]['en_jeu'] = True
-            self.mises_tour[username] = 0
-            self.evaluer_et_envoyer_combinaison(username)
+            if self.joueurs[username]['jetons'] > 0:  # Ne distribuer qu'aux joueurs avec des jetons
+                self.joueurs[username]['cartes'] = [self.deck.pop().to_dict() for _ in range(2)]
+                self.joueurs[username]['en_jeu'] = True  # S'assurer que tous les joueurs sont en jeu
+                self.mises_tour[username] = 0
+                self.evaluer_et_envoyer_combinaison(username)
         
         # Mise des blinds
         petite_blind_index = (self.dealer_index + 1) % len(joueurs_liste)
         grande_blind_index = (self.dealer_index + 2) % len(joueurs_liste)
         
+        # S'assurer que les joueurs des blinds ont assez de jetons
+        while self.joueurs[joueurs_liste[petite_blind_index]]['jetons'] <= 0:
+            petite_blind_index = (petite_blind_index + 1) % len(joueurs_liste)
+        while self.joueurs[joueurs_liste[grande_blind_index]]['jetons'] <= 0:
+            grande_blind_index = (grande_blind_index + 1) % len(joueurs_liste)
+        
         # Petite blind
         petite_blind_joueur = joueurs_liste[petite_blind_index]
-        self.joueurs[petite_blind_joueur]['jetons'] -= self.petite_blind
-        self.pot += self.petite_blind
-        self.mises_tour[petite_blind_joueur] = self.petite_blind
+        montant_petite_blind = min(self.petite_blind, self.joueurs[petite_blind_joueur]['jetons'])
+        self.joueurs[petite_blind_joueur]['jetons'] -= montant_petite_blind
+        self.pot += montant_petite_blind
+        self.mises_tour[petite_blind_joueur] = montant_petite_blind
         
         # Grande blind
         grande_blind_joueur = joueurs_liste[grande_blind_index]
-        self.joueurs[grande_blind_joueur]['jetons'] -= self.grande_blind
-        self.pot += self.grande_blind
-        self.mises_tour[grande_blind_joueur] = self.grande_blind
+        montant_grande_blind = min(self.grande_blind, self.joueurs[grande_blind_joueur]['jetons'])
+        self.joueurs[grande_blind_joueur]['jetons'] -= montant_grande_blind
+        self.pot += montant_grande_blind
+        self.mises_tour[grande_blind_joueur] = montant_grande_blind
+        self.mise_actuelle = montant_grande_blind
         
         # Initialiser la gestion des tours
         self.gestion_tour = GestionTour(self.joueurs)
@@ -146,9 +179,10 @@ class Partie:
         
         # Envoi des cartes aux joueurs
         for username in joueurs_liste:
-            socketio.emit('recevoir_cartes', {
-                'cartes': self.joueurs[username]['cartes']
-            }, room=username)
+            if self.joueurs[username]['jetons'] > 0:  # Ne distribuer qu'aux joueurs avec des jetons
+                socketio.emit('recevoir_cartes', {
+                    'cartes': self.joueurs[username]['cartes']
+                }, room=username)
         
         self.update_game_state()
 
@@ -191,8 +225,8 @@ class Partie:
         
         # Réinitialiser la gestion des tours pour la nouvelle phase
         self.gestion_tour = GestionTour(self.joueurs)
-        # Commencer par le premier joueur après le dealer qui est encore en jeu
-        self.gestion_tour.index_actuel = self.dealer_index
+        # Commencer par le premier joueur à gauche du dealer qui est encore en jeu
+        self.gestion_tour.index_actuel = (self.dealer_index + 1) % len(self.joueurs)
         joueur_suivant = self.gestion_tour.passer_au_suivant()
         
         if not joueur_suivant:
@@ -222,11 +256,10 @@ class Partie:
 
     def fin_manche(self, gagnant):
         if gagnant:
-            # Calculer le gain total (pot + mises du tour en cours)
+            # Le gain total est simplement le pot actuel, pas besoin d'ajouter les mises du tour
+            # car elles sont déjà incluses dans le pot quand elles sont faites
             gain_total = self.pot
-            for mise in self.mises_tour.values():
-                gain_total += mise
-                
+            
             self.joueurs[gagnant]['jetons'] += gain_total
             socketio.emit('fin_manche', {
                 'gagnant': gagnant,
@@ -315,7 +348,7 @@ class Partie:
         couleurs = [c.couleur for c in cartes]
         cartes_combinaison = []  # Pour stocker les cartes qui forment la combinaison
         
-        # Vérification de la quinte flush royale et quinte flush
+        # V��rification de la quinte flush royale et quinte flush
         for couleur in set(couleurs):
             cartes_couleur = [c for c in cartes if c.couleur == couleur]
             if len(cartes_couleur) >= 5:
@@ -487,11 +520,17 @@ class Partie:
         if username in self.joueurs:
             # Nettoyer les mises du joueur
             if username in self.mises_tour:
+                self.pot += self.mises_tour[username]  # Ajouter la mise au pot
                 del self.mises_tour[username]
+            
+            # Retirer le joueur des joueurs prêts
+            if username in self.joueurs_prets:
+                self.joueurs_prets.remove(username)
             
             # Supprimer le joueur
             del self.joueurs[username]
-            del self.deconnexions_temporaires[username]
+            if username in self.deconnexions_temporaires:
+                del self.deconnexions_temporaires[username]
             
             # Mettre à jour la gestion du tour si nécessaire
             if self.gestion_tour:
@@ -499,14 +538,23 @@ class Partie:
                 if len(self.joueurs) < 2:
                     if len(self.joueurs) == 1:
                         dernier_joueur = next(iter(self.joueurs.keys()))
+                        # Réinitialiser l'index avant de finir la manche
+                        self.gestion_tour.index_actuel = 0
                         self.fin_manche(dernier_joueur)
                     else:
                         self.phase = 'attente'
                 else:
                     # Si c'était le tour du joueur déconnecté
                     if self.gestion_tour.joueur_actuel() == username:
+                        # Réinitialiser l'index si nécessaire
+                        if self.gestion_tour.index_actuel >= len(self.joueurs):
+                            self.gestion_tour.index_actuel = 0
                         self.gestion_tour.passer_au_suivant()
-                        self.update_game_state()
+                    self.update_game_state()
+
+    def verifier_tous_prets(self):
+        """Vérifie si tous les joueurs sont prêts"""
+        return len(self.joueurs_prets) >= 2 and len(self.joueurs_prets) == len(self.joueurs)
 
 @app.route('/')
 def index():
@@ -633,9 +681,34 @@ def handle_action(data):
         emit('erreur', {'message': 'Ce n\'est pas votre tour'}, room=username)
         return
     
+    # Vérifier si le joueur a encore des jetons
+    if game.joueurs[username]['jetons'] <= 0:
+        game.joueurs[username]['en_jeu'] = False
+        socketio.emit('notification', {
+            'message': f'{username} n\'a plus de jetons et est éliminé de la partie',
+            'type': 'error'
+        }, room=room)
+        # Vérifier s'il ne reste qu'un joueur
+        joueurs_actifs = [j for j in game.joueurs if game.joueurs[j]['en_jeu']]
+        if len(joueurs_actifs) == 1:
+            game.fin_manche(joueurs_actifs[0])
+            return
+        game.gestion_tour.passer_au_suivant()
+        game.update_game_state()
+        return
+    
     mise_necessaire = game.mise_actuelle - game.mises_tour[username]
     
-    if action == 'mise':
+    if action == 'check':
+        if mise_necessaire > 0:
+            emit('erreur', {'message': 'Vous ne pouvez pas checker, vous devez suivre ou vous coucher'}, room=username)
+            return
+        # Notification de check
+        socketio.emit('notification', {
+            'message': f'{username} checke',
+            'type': 'action'
+        }, room=room)
+    elif action == 'mise':
         if montant < mise_necessaire:
             emit('erreur', {'message': f'Mise insuffisante. Minimum requis: {mise_necessaire}€'}, room=username)
             return
@@ -698,29 +771,14 @@ def on_leave(data):
     if room in games:
         game = games[room]
         if username in game.joueurs:
-            # Nettoyer les mises du joueur
-            if username in game.mises_tour:
-                del game.mises_tour[username]
-            
-            # Si c'était le tour du joueur qui quitte
-            if game.gestion_tour and game.gestion_tour.joueur_actuel() == username:
+            # Coucher le joueur s'il est encore en jeu
+            if game.phase != 'attente' and game.joueurs[username]['en_jeu']:
                 game.joueurs[username]['en_jeu'] = False
-                # Passer au joueur suivant
-                game.gestion_tour.passer_au_suivant()
+                if game.gestion_tour and game.gestion_tour.joueur_actuel() == username:
+                    game.gestion_tour.passer_au_suivant()
             
-            # Supprimer le joueur
-            del game.joueurs[username]
-            
-            # Mettre à jour la gestion du tour
-            if game.gestion_tour:
-                game.gestion_tour.ordre_joueurs = list(game.joueurs.keys())
-                if len(game.joueurs) < 2:
-                    # S'il ne reste qu'un joueur ou moins, terminer la manche
-                    if len(game.joueurs) == 1:
-                        dernier_joueur = next(iter(game.joueurs.keys()))
-                        game.fin_manche(dernier_joueur)
-                    else:
-                        game.phase = 'attente'
+            # Retirer le joueur de la partie
+            game.retirer_joueur(username)
             
             # Quitter les rooms
             leave_room(room)
@@ -729,35 +787,25 @@ def on_leave(data):
             # Notifier les autres joueurs
             emit('joueur_parti', {'username': username}, room=room)
             
-            # Mettre à jour l'état du jeu pour les joueurs restants
-            game.update_game_state()
-            
             # Si la partie est vide, la supprimer
             if not game.joueurs:
                 del games[room]
-                # Notifier tous les clients de la suppression de la table
-                emit('update_tables', {
-                    'tables': {
-                        room_id: {
-                            'joueurs': {
-                                u: {'jetons': j['jetons']} 
-                                for u, j in game.joueurs.items()
-                            }
-                        } for room_id, game in games.items()
-                    }
-                }, broadcast=True)
-            else:
-                # Mettre à jour la liste des tables pour tous les clients
-                emit('update_tables', {
-                    'tables': {
-                        room_id: {
-                            'joueurs': {
-                                u: {'jetons': j['jetons']} 
-                                for u, j in game.joueurs.items()
-                            }
-                        } for room_id, game in games.items()
-                    }
-                }, broadcast=True)
+            
+            # Mettre à jour la liste des tables pour tous les clients
+            emit('update_tables', {
+                'tables': {
+                    room_id: {
+                        'joueurs': {
+                            u: {'jetons': j['jetons']} 
+                            for u, j in game.joueurs.items()
+                        }
+                    } for room_id, game in games.items()
+                }
+            }, broadcast=True)
+            
+            # Mettre à jour l'état du jeu pour les joueurs restants
+            if game.joueurs:
+                game.update_game_state()
 
 @socketio.on('demander_combinaison')
 def handle_demander_combinaison(data):
@@ -808,7 +856,44 @@ def handle_disconnect():
 def handle_ping():
     emit('pong_server')
 
+@socketio.on('joueur_pret')
+def handle_joueur_pret(data):
+    room = data['room']
+    username = data['username']
+    
+    if room not in games:
+        return
+        
+    game = games[room]
+    game.joueurs_prets.add(username)
+    
+    # Notifier tous les joueurs du changement d'état
+    socketio.emit('update_joueurs_prets', {
+        'joueurs_prets': list(game.joueurs_prets)
+    }, room=room)
+    
+    # Si tous les joueurs sont prêts, démarrer la partie
+    if game.verifier_tous_prets():
+        game.distribuer_cartes()
+        socketio.emit('partie_demarree', room=room)
+        game.update_game_state()
+
+@socketio.on('joueur_pas_pret')
+def handle_joueur_pas_pret(data):
+    room = data['room']
+    username = data['username']
+    
+    if room not in games:
+        return
+        
+    game = games[room]
+    if username in game.joueurs_prets:
+        game.joueurs_prets.remove(username)
+    
+    # Notifier tous les joueurs du changement d'état
+    socketio.emit('update_joueurs_prets', {
+        'joueurs_prets': list(game.joueurs_prets)
+    }, room=room)
+
 if __name__ == '__main__':
-    # Modification pour le déploiement
-    port = int(os.environ.get('PORT', 5000))
-    socketio.run(app, host='0.0.0.0', port=port) 
+    socketio.run(app, debug=True, host='0.0.0.0', port=5000) 
