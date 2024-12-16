@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poker Multijoueurs</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: white;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .table {
+            background-color: #2d572c;
+            border-radius: 200px;
+            padding: 40px;
+            margin: 20px 0;
+            position: relative;
+            height: 500px;
+        }
+
+        .board {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .card {
+            display: inline-block;
+            width: 60px;
+            height: 90px;
+            background-color: white;
+            border-radius: 5px;
+            margin: 0 5px;
+            color: black;
+            line-height: 90px;
+            font-size: 24px;
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .card.red {
+            color: red;
+        }
+
+        .card.winning {
+            box-shadow: 0 0 15px #ffd700;
+            transform: scale(1.1);
+            background-color: #fffacd;
+        }
+
+        .player-spot {
+            position: absolute;
+            width: 150px;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .player-spot.active {
+            box-shadow: 0 0 15px #ffd700;
+        }
+
+        .mise {
+            position: absolute;
+            background-color: #4CAF50;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 14px;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .phase-indicator {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 18px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: center;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        input {
+            padding: 10px;
+            margin: 5px;
+            border-radius: 5px;
+            border: none;
+            font-size: 16px;
+        }
+
+        .login-section {
+            text-align: center;
+            margin-top: 100px;
+        }
+
+        .pot {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+
+        .mes-cartes-container {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .tour-indicator {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #4CAF50;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 18px;
+            z-index: 100;
+        }
+
+        /* Positions des joueurs */
+        .player-spot:nth-child(1) { bottom: 10px; left: 50%; transform: translateX(-50%); }
+        .player-spot:nth-child(2) { bottom: 25%; right: 10px; }
+        .player-spot:nth-child(3) { top: 25%; right: 10px; }
+        .player-spot:nth-child(4) { top: 10px; left: 50%; transform: translateX(-50%); }
+        .player-spot:nth-child(5) { top: 25%; left: 10px; }
+        .player-spot:nth-child(6) { bottom: 25%; left: 10px; }
+
+        .notifications-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .notification {
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 5px;
+            margin-top: 10px;
+            animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-out 4.5s forwards;
+            max-width: 300px;
+        }
+
+        .notification.success {
+            border-left: 4px solid #4CAF50;
+        }
+
+        .notification.error {
+            border-left: 4px solid #f44336;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+            }
+            to {
+                opacity: 0;
+            }
+        }
+
+        .notification.action {
+            background-color: rgba(33, 150, 243, 0.1);
+        }
+        
+        .notification.phase {
+            background-color: rgba(255, 152, 0, 0.1);
+        }
+
+        .historique-button {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background-color: #2196F3;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 1000;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            z-index: 2000;
+        }
+
+        .modal-content {
+            position: relative;
+            background-color: #2d2d2d;
+            margin: 10% auto;
+            padding: 20px;
+            width: 80%;
+            max-width: 600px;
+            border-radius: 10px;
+            color: white;
+        }
+
+        .close-modal {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #aaa;
+        }
+
+        .close-modal:hover {
+            color: white;
+        }
+
+        .main-info {
+            border-left: 4px solid #4CAF50;
+            padding: 10px;
+            margin: 10px 0;
+            background-color: rgba(74, 175, 80, 0.1);
+        }
+
+        .lobby-section {
+            text-align: center;
+            margin-top: 50px;
+            color: white;
+        }
+
+        .create-table-section {
+            margin-bottom: 40px;
+            padding: 20px;
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+        }
+
+        .tables-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .table-item {
+            background-color: rgba(45, 87, 44, 0.5);
+            padding: 15px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+
+        .table-item:hover {
+            background-color: rgba(45, 87, 44, 0.8);
+        }
+
+        .table-info {
+            text-align: left;
+        }
+
+        .table-players {
+            font-size: 0.9em;
+            color: #aaa;
+            margin-top: 5px;
+        }
+
+        .join-button {
+            background-color: #2196F3;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .join-button:hover {
+            background-color: #1976D2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="login-section" class="lobby-section">
+            <h1>Poker Multijoueurs</h1>
+            <div class="create-table-section">
+                <h2>Créer une nouvelle table</h2>
+                <input type="text" id="username" placeholder="Votre nom">
+                <button onclick="creerTable()">Créer une table</button>
+            </div>
+            
+            <div class="tables-list" id="tables-list">
+                <h2>Tables disponibles</h2>
+                <!-- Les tables seront ajoutées ici dynamiquement -->
+            </div>
+        </div>
+
+        <div id="game-section" style="display: none;">
+            <div id="tour-indicator" class="tour-indicator" style="display: none;">
+                En attente des joueurs...
+            </div>
+            <div class="table">
+                <div class="phase-indicator" id="phase">En attente</div>
+                <div class="board">
+                    <div class="pot" id="pot">Pot: 0€</div>
+                    <div id="cartes-communes"></div>
+                </div>
+                <div id="joueurs"></div>
+            </div>
+
+            <div class="mes-cartes-container">
+                <h3>Vos cartes</h3>
+                <div id="mes-cartes"></div>
+                <div id="ma-combinaison" style="margin-top: 10px; font-size: 18px; color: #4CAF50; font-weight: bold;"></div>
+            </div>
+
+            <div class="controls">
+                <button onclick="demarrerPartie()" id="btn-demarrer">Démarrer la partie</button>
+                <button onclick="suivre()" id="btn-suivre" disabled>Suivre</button>
+                <button onclick="miser()" id="btn-miser" disabled>Miser</button>
+                <input type="number" id="mise-montant" placeholder="Montant" min="0" step="10">
+                <button onclick="seCoucher()" id="btn-coucher" disabled>Se coucher</button>
+            </div>
+        </div>
+
+        <div id="historique-button" class="historique-button" style="display: none;">
+            Dernière main
+        </div>
+        
+        <div id="historique-modal" class="modal">
+            <div class="modal-content">
+                <span class="close-modal" onclick="fermerModal()">&times;</span>
+                <h2>Dernière main jouée</h2>
+                <div id="historique-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="notifications-container" id="notifications"></div>
+
+    <script>
+        const socket = io({
+            pingInterval: 5000,  // 5 secondes au lieu de 2
+            pingTimeout: 10000,   // 10 secondes au lieu de 5
+            reconnection: true,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            reconnectionAttempts: 5
+        });
+        let currentUser = '';
+        let currentRoom = '';
+        let monTour = false;
+        let lastPong = Date.now();
+        let connectionCheckInterval;
+        let isConnected = true;  // Nouvel état pour suivre la connexion
+        let derniereMain = null;  // Pour stocker la dernière main
+        let tables = {};  // Pour stocker les informations des tables
+
+        // Gestion de la connexion/déconnexion
+        socket.on('connect', () => {
+            isConnected = true;
+            if (!isConnected) {  // Afficher la notification seulement si on était déconnecté
+                showNotification('Connecté au serveur', 'success');
+            }
+            startConnectionCheck();
+            // Si on était déjà dans une partie, tenter de la rejoindre
+            if (currentUser && currentRoom) {
+                socket.emit('rejoindre_partie', {
+                    username: currentUser,
+                    room: currentRoom
+                });
+            }
+        });
+
+        socket.on('disconnect', (reason) => {
+            isConnected = false;
+            showNotification('Déconnecté du serveur: ' + reason, 'error');
+            stopConnectionCheck();
+        });
+
+        socket.on('connect_error', (error) => {
+            showNotification('Erreur de connexion: ' + error.message, 'error');
+        });
+
+        // Fonction pour vérifier la connexion
+        function startConnectionCheck() {
+            if (connectionCheckInterval) {
+                clearInterval(connectionCheckInterval);
+            }
+            connectionCheckInterval = setInterval(() => {
+                if (Date.now() - lastPong > 15000) {  // 15 secondes au lieu de 10
+                    if (isConnected) {  // Afficher la notification seulement si on était connecté
+                        isConnected = false;
+                        showNotification('Connexion perdue, tentative de reconnexion...', 'error');
+                    }
+                    socket.connect();
+                } else {
+                    socket.emit('ping_client');
+                }
+            }, 10000);  // 10 secondes au lieu de 5
+        }
+
+        function stopConnectionCheck() {
+            if (connectionCheckInterval) {
+                clearInterval(connectionCheckInterval);
+                connectionCheckInterval = null;
+            }
+        }
+
+        socket.on('pong_server', () => {
+            lastPong = Date.now();
+        });
+
+        // Gestion de la reconnexion
+        socket.on('reconnect', () => {
+            if (currentUser && currentRoom) {
+                // Tenter de rejoindre à nouveau la partie
+                socket.emit('rejoindre_partie', {
+                    username: currentUser,
+                    room: currentRoom
+                });
+                showNotification('Reconnecté à la partie', 'success');
+            }
+        });
+
+        function creerTable() {
+            const username = document.getElementById('username').value;
+            if (!username) {
+                showNotification('Veuillez entrer votre nom', 'error');
+                return;
+            }
+            
+            const tableId = 'table_' + Date.now();  // Création d'un ID unique
+            currentUser = username;
+            currentRoom = tableId;
+            
+            socket.emit('creer_table', {
+                username: username,
+                room: tableId
+            });
+        }
+
+        function rejoindreTable(tableId) {
+            const username = document.getElementById('username').value;
+            if (!username) {
+                showNotification('Veuillez entrer votre nom', 'error');
+                return;
+            }
+            
+            currentUser = username;
+            currentRoom = tableId;
+            
+            socket.emit('rejoindre_partie', {
+                username: username,
+                room: tableId
+            });
+        }
+
+        function updateTablesList(tables) {
+            const tablesList = document.getElementById('tables-list');
+            let html = '<h2>Tables disponibles</h2>';
+            
+            Object.entries(tables).forEach(([tableId, tableInfo]) => {
+                const joueurs = Object.keys(tableInfo.joueurs).join(', ');
+                const nbJoueurs = Object.keys(tableInfo.joueurs).length;
+                html += `
+                    <div class="table-item">
+                        <div class="table-info">
+                            <div>Table #${tableId.slice(-4)}</div>
+                            <div class="table-players">Joueurs (${nbJoueurs}/6): ${joueurs}</div>
+                        </div>
+                        <button class="join-button" onclick="rejoindreTable('${tableId}')">
+                            Rejoindre
+                        </button>
+                    </div>
+                `;
+            });
+            
+            if (Object.keys(tables).length === 0) {
+                html += '<div style="text-align: center; margin-top: 20px; color: #666;">Aucune table disponible</div>';
+            }
+            
+            tablesList.innerHTML = html;
+        }
+
+        // Nouveaux événements socket
+        socket.on('update_tables', (data) => {
+            tables = data.tables;
+            updateTablesList(tables);
+        });
+
+        socket.on('table_creee', (data) => {
+            showNotification('Table créée avec succès', 'success');
+            document.getElementById('login-section').style.display = 'none';
+            document.getElementById('game-section').style.display = 'block';
+        });
+
+        function demarrerPartie() {
+            socket.emit('demarrer_partie', {
+                room: currentRoom
+            });
+        }
+
+        function updateControls() {
+            const buttons = document.querySelectorAll('.controls button');
+            const miseInput = document.getElementById('mise-montant');
+            
+            buttons.forEach(btn => {
+                if (btn.id !== 'btn-demarrer') {
+                    btn.disabled = !monTour;
+                }
+            });
+            
+            if (monTour) {
+                miseInput.disabled = false;
+                miseInput.value = ''; // Réinitialiser la valeur
+            } else {
+                miseInput.disabled = true;
+            }
+        }
+
+        function miser() {
+            const montant = parseInt(document.getElementById('mise-montant').value);
+            if (montant > 0) {
+                socket.emit('action_joueur', {
+                    action: 'mise',
+                    montant: montant,
+                    username: currentUser,
+                    room: currentRoom
+                });
+            }
+        }
+
+        function suivre() {
+            socket.emit('action_joueur', {
+                action: 'suivre',
+                username: currentUser,
+                room: currentRoom
+            });
+        }
+
+        function seCoucher() {
+            socket.emit('action_joueur', {
+                action: 'coucher',
+                username: currentUser,
+                room: currentRoom
+            });
+        }
+
+        socket.on('joueur_rejoint', (data) => {
+            showNotification(`${data.username} a rejoint la partie`, 'success');
+            updateJoueurs(data.joueurs);
+        });
+
+        socket.on('activer_demarrage', () => {
+            const btnDemarrer = document.getElementById('btn-demarrer');
+            btnDemarrer.disabled = false;
+            btnDemarrer.style.display = 'block';
+            showNotification('La partie peut démarrer !', 'success');
+        });
+
+        socket.on('partie_demarree', () => {
+            document.getElementById('btn-demarrer').style.display = 'none';
+            showNotification('La partie commence !', 'success');
+        });
+
+        function afficherCarte(carte) {
+            const cardDiv = document.createElement('div');
+            cardDiv.className = 'card';
+            if (carte.couleur === '♥' || carte.couleur === '♦') {
+                cardDiv.className += ' red';
+            }
+            cardDiv.textContent = `${carte.valeur}${carte.couleur}`;
+            return cardDiv;
+        }
+
+        socket.on('recevoir_cartes', (data) => {
+            const mesCartes = document.getElementById('mes-cartes');
+            mesCartes.innerHTML = '';
+            data.cartes.forEach(carte => {
+                mesCartes.appendChild(afficherCarte(carte));
+            });
+        });
+
+        socket.on('update_game_state', (data) => {
+            document.getElementById('pot').textContent = `Pot: ${data.pot}€`;
+            document.getElementById('phase').textContent = traduirePhase(data.phase);
+            
+            // Mise à jour de l'indicateur de tour
+            const tourIndicator = document.getElementById('tour-indicator');
+            tourIndicator.style.display = 'block';
+            if (data.tour_actuel === currentUser) {
+                tourIndicator.textContent = "C'est à votre tour de jouer!";
+                tourIndicator.style.backgroundColor = '#4CAF50';
+            } else if (data.tour_actuel) {
+                tourIndicator.textContent = `C'est au tour de ${data.tour_actuel}`;
+                tourIndicator.style.backgroundColor = '#666';
+            } else {
+                tourIndicator.textContent = 'En attente des joueurs...';
+            }
+            
+            monTour = data.tour_actuel === currentUser;
+            updateControls();
+            updateJoueurs(data.joueurs);
+            
+            // Mise à jour des cartes communes
+            if (data.cartes_communes) {
+                const cartesCommunes = document.getElementById('cartes-communes');
+                cartesCommunes.innerHTML = '';
+                data.cartes_communes.forEach(carte => {
+                    cartesCommunes.appendChild(afficherCarte(carte));
+                });
+                
+                // Réappliquer la surbrillance après la mise à jour des cartes
+                socket.emit('demander_combinaison', {
+                    username: currentUser,
+                    room: currentRoom
+                });
+            }
+        });
+
+        function traduirePhase(phase) {
+            const traductions = {
+                'attente': 'En attente',
+                'preflop': 'Pre-flop',
+                'flop': 'Flop',
+                'turn': 'Turn',
+                'river': 'River'
+            };
+            return traductions[phase] || phase;
+        }
+
+        function updateJoueurs(joueurs) {
+            const joueursDiv = document.getElementById('joueurs');
+            joueursDiv.innerHTML = '';
+            
+            // Créer un tableau pour ordonner les joueurs
+            const positions = [
+                { bottom: '10px', left: '50%', transform: 'translateX(-50%)' },
+                { bottom: '25%', right: '10px' },
+                { top: '25%', right: '10px' },
+                { top: '10px', left: '50%', transform: 'translateX(-50%)' },
+                { top: '25%', left: '10px' },
+                { bottom: '25%', left: '10px' }
+            ];
+            
+            Object.entries(joueurs).forEach(([username, data], index) => {
+                const spot = document.createElement('div');
+                spot.className = `player-spot${username === currentUser ? ' active' : ''}`;
+                spot.setAttribute('data-username', username);
+                
+                // Appliquer le style de position
+                const position = positions[index];
+                Object.assign(spot.style, position);
+                
+                // Afficher la mise du tour si elle existe
+                let miseHtml = '';
+                if (data.mise_tour > 0) {
+                    miseHtml = `<div class="mise">${data.mise_tour}€</div>`;
+                }
+                
+                spot.innerHTML = `
+                    ${miseHtml}
+                    <div>${username}</div>
+                    <div>${data.jetons}€</div>
+                    ${!data.en_jeu ? '<div>(Couché)</div>' : ''}
+                `;
+                joueursDiv.appendChild(spot);
+            });
+        }
+
+        // Au chargement initial, désactiver le bouton démarrer
+        document.addEventListener('DOMContentLoaded', () => {
+            const btnDemarrer = document.getElementById('btn-demarrer');
+            btnDemarrer.disabled = true;
+        });
+
+        socket.on('fin_manche', (data) => {
+            derniereMain = data;  // Sauvegarder la dernière main
+            document.getElementById('historique-button').style.display = 'block';
+            
+            let message = `${data.gagnant} gagne le pot de ${data.gain}€`;
+            showNotification(message, 'success');
+            
+            // Réinitialiser l'affichage des cartes gagnantes
+            document.querySelectorAll('.card').forEach(card => {
+                card.classList.remove('winning');
+            });
+            
+            // Afficher les cartes gagnantes du gagnant
+            if (data.mains && data.mains[data.gagnant]) {
+                const cartesGagnantes = data.mains[data.gagnant].cartes_gagnantes.map(c => `${c.valeur}${c.couleur}`);
+                document.querySelectorAll('.card').forEach(card => {
+                    const cardText = card.textContent.trim();
+                    if (cartesGagnantes.includes(cardText)) {
+                        card.classList.add('winning');
+                    }
+                });
+            }
+        });
+
+        socket.on('nouvelle_manche', (data) => {
+            showNotification('Nouvelle manche dans ' + data.delai + ' secondes...', 'success');
+            setTimeout(() => {
+                socket.emit('demarrer_partie', {
+                    room: currentRoom
+                });
+            }, data.delai * 1000);
+        });
+
+        socket.on('erreur', (data) => {
+            showNotification(data.message, 'error');
+        });
+
+        socket.on('combinaison_actuelle', (data) => {
+            document.getElementById('ma-combinaison').textContent = data.combinaison;
+            
+            // Réinitialiser toutes les cartes
+            document.querySelectorAll('.card').forEach(card => {
+                card.classList.remove('winning');
+            });
+            
+            // Mettre en surbrillance les cartes gagnantes
+            if (data.cartes_gagnantes) {
+                const cartesGagnantes = data.cartes_gagnantes.map(c => `${c.valeur}${c.couleur}`);
+                
+                // Vérifier toutes les cartes (communes et personnelles)
+                document.querySelectorAll('.card').forEach(card => {
+                    const cardText = card.textContent.trim();
+                    if (cartesGagnantes.includes(cardText)) {
+                        card.classList.add('winning');
+                    }
+                });
+            }
+        });
+
+        // Gestion des notifications
+        socket.on('notification', (data) => {
+            const type = data.type || 'success';  // 'action' ou 'phase' ou par défaut 'success'
+            showNotification(data.message, type);
+        });
+
+        // Fonction de notification améliorée
+        function showNotification(message, type = 'success') {
+            const notifContainer = document.getElementById('notifications');
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            
+            // Ajouter des styles spécifiques selon le type
+            if (type === 'action') {
+                notification.style.borderLeft = '4px solid #2196F3';  // Bleu pour les actions
+            } else if (type === 'phase') {
+                notification.style.borderLeft = '4px solid #FF9800';  // Orange pour les phases
+            }
+            
+            notifContainer.appendChild(notification);
+            
+            // Supprimer la notification après 5 secondes
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+
+        // Ajouter un gestionnaire pour la fermeture de la fenêtre
+        window.addEventListener('beforeunload', () => {
+            if (currentUser && currentRoom) {
+                socket.emit('quitter_partie', {
+                    username: currentUser,
+                    room: currentRoom
+                });
+            }
+        });
+
+        // Fonctions pour le modal
+        function ouvrirModal() {
+            document.getElementById('historique-modal').style.display = 'block';
+            if (derniereMain) {
+                afficherDerniereMain(derniereMain);
+            }
+        }
+
+        function fermerModal() {
+            document.getElementById('historique-modal').style.display = 'none';
+        }
+
+        function afficherDerniereMain(data) {
+            const content = document.getElementById('historique-content');
+            const gain = data.gain || data.pot || 0;  // Utiliser gain ou pot ou 0 par défaut
+            let html = `<div class="main-info">
+                <h3>${data.gagnant} a gagné ${gain}€</h3>
+            </div>`;
+
+            if (data.mains) {
+                html += '<h4>Mains des joueurs:</h4>';
+                for (const [joueur, info] of Object.entries(data.mains)) {
+                    const style = joueur === data.gagnant ? 'border-left: 4px solid #ffd700; padding-left: 10px;' : '';
+                    let cartesText = '';
+                    
+                    // Vérifier si nous avons les cartes dans le bon format
+                    if (Array.isArray(info.cartes)) {
+                        cartesText = info.cartes.map(c => `${c.valeur}${c.couleur}`).join(', ');
+                    } else if (info.main_complete) {
+                        cartesText = info.main_complete.map(c => `${c.valeur}${c.couleur}`).join(', ');
+                    }
+                    
+                    html += `<div style="${style}">
+                        <strong>${joueur}</strong>: ${cartesText}<br>
+                        <em>${info.combinaison || ''}</em>
+                    </div><br>`;
+                }
+            }
+            content.innerHTML = html;
+        }
+
+        // Ajouter le gestionnaire de clic pour le bouton d'historique
+        document.getElementById('historique-button').onclick = ouvrirModal;
+
+        // Fermer le modal si on clique en dehors
+        window.onclick = function(event) {
+            const modal = document.getElementById('historique-modal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html> 
