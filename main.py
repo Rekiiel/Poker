@@ -348,7 +348,7 @@ class Partie:
         couleurs = [c.couleur for c in cartes]
         cartes_combinaison = []  # Pour stocker les cartes qui forment la combinaison
         
-        # V��rification de la quinte flush royale et quinte flush
+        # Vérification de la quinte flush royale et quinte flush
         for couleur in set(couleurs):
             cartes_couleur = [c for c in cartes if c.couleur == couleur]
             if len(cartes_couleur) >= 5:
@@ -711,6 +711,13 @@ def handle_action(data):
     elif action == 'mise':
         if montant < mise_necessaire:
             emit('erreur', {'message': f'Mise insuffisante. Minimum requis: {mise_necessaire}€'}, room=username)
+            return
+        # Vérifier le montant maximum possible (total des jetons des autres joueurs)
+        joueurs_actifs = [j for j in game.joueurs if game.joueurs[j]['en_jeu'] and j != username]
+        max_jetons_autres = sum(game.joueurs[j]['jetons'] for j in joueurs_actifs)
+        montant_max = min(game.joueurs[username]['jetons'], max_jetons_autres)
+        if montant > montant_max:
+            emit('erreur', {'message': f'Mise impossible. Maximum possible: {montant_max}€'}, room=username)
             return
         if montant > game.joueurs[username]['jetons']:
             emit('erreur', {'message': f'Vous n\'avez pas assez de jetons. Vous avez {game.joueurs[username]["jetons"]}€'}, room=username)
