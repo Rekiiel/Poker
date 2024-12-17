@@ -99,8 +99,9 @@ class Partie:
         self.dealer_index = 0
         self.mises_tour = {}
         self.gestion_tour = None
-        self.deconnexions_temporaires = {}  # Pour suivre les déconnexions temporaires
+        self.deconnexions_temporaires = {}
         self.joueurs_prets = set()  # Pour suivre les joueurs prêts
+        self.partie_en_cours = False
         self.initialiser_deck()
 
     def initialiser_deck(self):
@@ -115,6 +116,10 @@ class Partie:
         self.cartes_communes = []
         self.mise_actuelle = self.grande_blind
         self.joueurs_prets.clear()  # Réinitialiser les joueurs prêts
+        self.partie_en_cours = True  # Marquer la partie comme en cours
+        
+        # Notifier immédiatement tous les clients du changement d'état
+        broadcast_tables_update()
         
         # Vérifier et éliminer les joueurs sans jetons
         joueurs_elimines = []
@@ -256,8 +261,6 @@ class Partie:
 
     def fin_manche(self, gagnant):
         if gagnant:
-            # Le gain total est simplement le pot actuel, pas besoin d'ajouter les mises du tour
-            # car elles sont déjà incluses dans le pot quand elles sont faites
             gain_total = self.pot
             
             self.joueurs[gagnant]['jetons'] += gain_total
@@ -267,18 +270,19 @@ class Partie:
                 'mains': {u: {'valeur': v, 'cartes': self.joueurs[u]['cartes']} for u, v in self.joueurs.items() if u == gagnant or self.joueurs[u]['en_jeu']}
             }, room=self.room_id)
         
-        # Préparation de la prochaine manche
         self.dealer_index = (self.dealer_index + 1) % len(self.joueurs)
         self.phase = 'attente'
         self.pot = 0
         self.cartes_communes = []
         self.mise_actuelle = 0
         self.mises_tour = {}
+        self.partie_en_cours = False  # Marquer la partie comme terminée
         self.initialiser_deck()
         
-        # Démarrer automatiquement la prochaine manche après un court délai
-        socketio.emit('nouvelle_manche', {'delai': 3}, room=self.room_id)  # 3 secondes de délai
+        # Notifier immédiatement tous les clients du changement d'état
+        broadcast_tables_update()
         
+        socketio.emit('nouvelle_manche', {'delai': 3}, room=self.room_id)
         self.update_game_state()
 
     def evaluer_mains(self):
@@ -367,13 +371,22 @@ class Partie:
         for valeur, count in compteur.items():
             if count == 4:
                 cartes_combinaison = [c for c in cartes if c.get_valeur_numerique() == valeur]
+                # Ajouter la plus haute carte restante
+                autres_cartes = [c for c in cartes if c.get_valeur_numerique() != valeur]
+                if autres_cartes:
+                    cartes_combinaison.append(max(autres_cartes, key=lambda c: c.get_valeur_numerique()))
                 return 8, cartes_combinaison
         
         # Full house
-        if 3 in compteur.values() and 2 in compteur.values():
-            brelan_valeur = [v for v, c in compteur.items() if c == 3][0]
-            paire_valeur = [v for v, c in compteur.items() if c == 2][0]
-            cartes_combinaison = [c for c in cartes if c.get_valeur_numerique() in [brelan_valeur, paire_valeur]]
+        brelan = None
+        paire = None
+        for valeur, count in compteur.items():
+            if count == 3 and (brelan is None or valeur > brelan):
+                brelan = valeur
+            elif count == 2 and (paire is None or valeur > paire):
+                paire = valeur
+        if brelan is not None and paire is not None:
+            cartes_combinaison = [c for c in cartes if c.get_valeur_numerique() in [brelan, paire]]
             return 7, cartes_combinaison
         
         # Couleur
@@ -395,23 +408,40 @@ class Partie:
         for valeur, count in compteur.items():
             if count == 3:
                 cartes_combinaison = [c for c in cartes if c.get_valeur_numerique() == valeur]
+                # Ajouter les deux plus hautes cartes restantes
+                autres_cartes = sorted([c for c in cartes if c.get_valeur_numerique() != valeur], 
+                                     key=lambda c: c.get_valeur_numerique(), reverse=True)[:2]
+                cartes_combinaison.extend(autres_cartes)
                 return 4, cartes_combinaison
         
         # Deux paires
-        if list(compteur.values()).count(2) >= 2:
-            paires = [v for v, c in compteur.items() if c == 2]
+        paires = []
+        for valeur, count in compteur.items():
+            if count == 2:
+                paires.append(valeur)
+        if len(paires) >= 2:
+            paires.sort(reverse=True)  # Trier les paires par ordre décroissant
+            paires = paires[:2]  # Garder les deux plus hautes paires
             cartes_combinaison = [c for c in cartes if c.get_valeur_numerique() in paires]
+            # Ajouter la plus haute carte restante
+            autres_cartes = [c for c in cartes if c.get_valeur_numerique() not in paires]
+            if autres_cartes:
+                cartes_combinaison.append(max(autres_cartes, key=lambda c: c.get_valeur_numerique()))
             return 3, cartes_combinaison
         
         # Paire
         for valeur, count in compteur.items():
             if count == 2:
                 cartes_combinaison = [c for c in cartes if c.get_valeur_numerique() == valeur]
+                # Ajouter les trois plus hautes cartes restantes
+                autres_cartes = sorted([c for c in cartes if c.get_valeur_numerique() != valeur], 
+                                     key=lambda c: c.get_valeur_numerique(), reverse=True)[:3]
+                cartes_combinaison.extend(autres_cartes)
                 return 2, cartes_combinaison
         
         # Carte haute
-        carte_haute = max(cartes, key=lambda c: c.get_valeur_numerique())
-        return 1, [carte_haute]
+        cartes_triees = sorted(cartes, key=lambda c: c.get_valeur_numerique(), reverse=True)
+        return 1, [cartes_triees[0]]  # Retourner la plus haute carte
 
     def update_game_state(self):
         # S'assurer que mises_tour contient tous les joueurs actuels
@@ -436,6 +466,7 @@ class Partie:
             'mise_actuelle': self.mise_actuelle,
             'phase': self.phase,
             'cartes_communes': self.cartes_communes,
+            'partie_en_cours': self.partie_en_cours,
             'joueurs': {
                 u: {
                     'jetons': j['jetons'],
@@ -448,6 +479,14 @@ class Partie:
         }, room=self.room_id)
 
     def evaluer_et_envoyer_combinaison(self, username):
+        # Vérifier si le joueur existe encore dans la partie
+        if username not in self.joueurs:
+            socketio.emit('combinaison_actuelle', {
+                'combinaison': 'Non disponible',
+                'cartes_gagnantes': []
+            }, room=username)
+            return
+        
         joueur = self.joueurs[username]
         if not joueur['en_jeu']:
             return
@@ -511,10 +550,11 @@ class Partie:
                                 'joueurs': {
                                     u: {'jetons': j['jetons']} 
                                     for u, j in game.joueurs.items()
-                                }
+                                },
+                                'partie_en_cours': game.partie_en_cours
                             } for room_id, game in games.items()
                         }
-                    }, broadcast=True)
+                    }, broadcast=True)  # Envoyer à tous les clients
 
     def retirer_joueur(self, username):
         if username in self.joueurs:
@@ -554,7 +594,69 @@ class Partie:
 
     def verifier_tous_prets(self):
         """Vérifie si tous les joueurs sont prêts"""
-        return len(self.joueurs_prets) >= 2 and len(self.joueurs_prets) == len(self.joueurs)
+        if self.partie_en_cours:
+            return False
+        if len(self.joueurs) < 2:  # Il faut au moins 2 joueurs
+            return False
+        return len(self.joueurs_prets) == len(self.joueurs)  # Tous les joueurs doivent être prêts
+
+    def demarrer_partie(self):
+        """Démarre une nouvelle partie"""
+        if not self.verifier_tous_prets():
+            return False
+            
+        self.partie_en_cours = True
+        self.phase = 'preflop'
+        self.pot = 0
+        self.cartes_communes = []
+        self.mise_actuelle = self.grande_blind
+        self.mises_tour = {}
+        self.initialiser_deck()
+        
+        # Distribution des cartes
+        for username in self.joueurs:
+            self.joueurs[username]['cartes'] = [self.deck.pop().to_dict() for _ in range(2)]
+            self.joueurs[username]['en_jeu'] = True
+            self.mises_tour[username] = 0
+            
+            # Envoyer les cartes à chaque joueur
+            socketio.emit('recevoir_cartes', {
+                'cartes': self.joueurs[username]['cartes']
+            }, room=username)
+        
+        # Mise des blinds
+        joueurs_liste = list(self.joueurs.keys())
+        petite_blind_index = (self.dealer_index + 1) % len(joueurs_liste)
+        grande_blind_index = (self.dealer_index + 2) % len(joueurs_liste)
+        
+        # Petite blind
+        petite_blind_joueur = joueurs_liste[petite_blind_index]
+        montant_petite_blind = min(self.petite_blind, self.joueurs[petite_blind_joueur]['jetons'])
+        self.joueurs[petite_blind_joueur]['jetons'] -= montant_petite_blind
+        self.pot += montant_petite_blind
+        self.mises_tour[petite_blind_joueur] = montant_petite_blind
+        
+        # Grande blind
+        grande_blind_joueur = joueurs_liste[grande_blind_index]
+        montant_grande_blind = min(self.grande_blind, self.joueurs[grande_blind_joueur]['jetons'])
+        self.joueurs[grande_blind_joueur]['jetons'] -= montant_grande_blind
+        self.pot += montant_grande_blind
+        self.mises_tour[grande_blind_joueur] = montant_grande_blind
+        self.mise_actuelle = montant_grande_blind
+        
+        # Initialiser la gestion des tours
+        self.gestion_tour = GestionTour(self.joueurs)
+        self.gestion_tour.index_actuel = (grande_blind_index + 1) % len(joueurs_liste)
+        
+        # Notifications
+        socketio.emit('notification', {
+            'message': 'La partie commence !',
+            'type': 'success'
+        }, room=self.room_id)
+        
+        # Mise à jour de l'état du jeu
+        self.update_game_state()
+        return True
 
 @app.route('/')
 def index():
@@ -590,10 +692,11 @@ def handle_create_table(data):
                 'joueurs': {
                     u: {'jetons': j['jetons']} 
                     for u, j in game.joueurs.items()
-                }
+                },
+                'partie_en_cours': game.partie_en_cours
             } for room_id, game in games.items()
         }
-    }, broadcast=True)
+    }, broadcast=True)  # Envoyer à tous les clients
     
     # Mettre à jour l'état du jeu
     games[room].update_game_state()
@@ -617,7 +720,7 @@ def on_join(data):
     games[room].joueurs[username] = {
         'cartes': [],
         'jetons': 1000,
-        'en_jeu': True
+        'en_jeu': not games[room].partie_en_cours  # Le joueur n'est pas en jeu si une partie est en cours
     }
     
     # Émettre l'état actuel à tous les joueurs
@@ -626,7 +729,8 @@ def on_join(data):
         'joueurs': {
             u: {'jetons': j['jetons']} 
             for u, j in games[room].joueurs.items()
-        }
+        },
+        'partie_en_cours': games[room].partie_en_cours
     }, room=room)
     
     # Mettre à jour l'état du jeu pour tous les joueurs
@@ -639,20 +743,37 @@ def on_join(data):
                 'joueurs': {
                     u: {'jetons': j['jetons']} 
                     for u, j in game.joueurs.items()
-                }
+                },
+                'partie_en_cours': game.partie_en_cours
             } for room_id, game in games.items()
         }
-    }, broadcast=True)
+    }, broadcast=True)  # Envoyer à tous les clients
     
-    # Si on a 2 joueurs ou plus, activer le bouton démarrer pour tous
-    if len(games[room].joueurs) >= 2:
+    # Si on a 2 joueurs ou plus et qu'aucune partie n'est en cours, activer le bouton démarrer
+    if len(games[room].joueurs) >= 2 and not games[room].partie_en_cours:
         emit('activer_demarrage', room=room)
     
     # Cacher le lobby et afficher le jeu pour le joueur qui rejoint
     emit('table_creee', {
         'username': username,
-        'room': room
+        'room': room,
+        'partie_en_cours': games[room].partie_en_cours
     })
+
+def broadcast_tables_update():
+    """Fonction utilitaire pour diffuser la mise à jour des tables à tous les clients"""
+    tables_data = {
+        'tables': {
+            room_id: {
+                'joueurs': {
+                    u: {'jetons': j['jetons']} 
+                    for u, j in game.joueurs.items()
+                },
+                'partie_en_cours': game.partie_en_cours
+            } for room_id, game in games.items()
+        }
+    }
+    socketio.emit('update_tables', tables_data)
 
 @socketio.on('demarrer_partie')
 def start_game(data):
@@ -660,9 +781,23 @@ def start_game(data):
     if room in games:
         game = games[room]
         if len(game.joueurs) >= 2:
+            # Mettre à jour l'état de la partie
+            game.partie_en_cours = True
+            
+            # Notifier immédiatement tous les clients du changement d'état
+            broadcast_tables_update()
+            
+            # Notifier le démarrage de la partie
+            socketio.emit('partie_demarree', {
+                'partie_en_cours': True,
+                'room': room
+            }, room=room)
+            
+            # Distribuer les cartes et continuer la partie
             game.distribuer_cartes()
-            emit('partie_demarree', room=room)
-            game.update_game_state()  # S'assurer que l'état est mis à jour après le démarrage
+            
+            # Mettre à jour l'état du jeu
+            game.update_game_state()
         else:
             emit('erreur', {'message': 'Il faut au moins 2 joueurs pour démarrer la partie'}, room=room)
 
@@ -730,6 +865,18 @@ def handle_action(data):
         # Notification de mise
         socketio.emit('notification', {
             'message': f'{username} a misé {montant}€',
+            'type': 'action'
+        }, room=room)
+    elif action == 'allin':
+        montant = game.joueurs[username]['jetons']
+        game.pot += montant
+        game.joueurs[username]['jetons'] = 0
+        game.mise_actuelle = max(game.mise_actuelle, game.mises_tour[username] + montant)
+        game.mises_tour[username] += montant
+        game.gestion_tour.dernier_miseur = username
+        # Notification de all-in
+        socketio.emit('notification', {
+            'message': f'{username} est All-in avec {montant}€ !',
             'type': 'action'
         }, room=room)
     elif action == 'suivre':
@@ -805,10 +952,11 @@ def on_leave(data):
                         'joueurs': {
                             u: {'jetons': j['jetons']} 
                             for u, j in game.joueurs.items()
-                        }
+                        },
+                        'partie_en_cours': game.partie_en_cours
                     } for room_id, game in games.items()
                 }
-            }, broadcast=True)
+            }, broadcast=True)  # Envoyer à tous les clients
             
             # Mettre à jour l'état du jeu pour les joueurs restants
             if game.joueurs:
@@ -827,6 +975,9 @@ def handle_connect(auth):
     session_id = request.sid
     emit('connected', {'sid': session_id})
     
+    # Envoyer immédiatement l'état actuel des tables au client qui se connecte
+    broadcast_tables_update()
+    
     # Envoyer la liste des tables disponibles
     emit('update_tables', {
         'tables': {
@@ -834,10 +985,11 @@ def handle_connect(auth):
                 'joueurs': {
                     u: {'jetons': j['jetons']} 
                     for u, j in game.joueurs.items()
-                }
+                },
+                'partie_en_cours': game.partie_en_cours
             } for room_id, game in games.items()
         }
-    })
+    }, broadcast=True)  # Envoyer à tous les clients
     
     # Vérifier si le joueur était temporairement déconnecté
     for game in games.values():
@@ -852,12 +1004,11 @@ def handle_connect(auth):
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    session_id = request.sid
+    # Parcourir toutes les parties pour trouver le joueur déconnecté
     for room_id, game in list(games.items()):
         for username in list(game.joueurs.keys()):
-            if username in request.namespace.rooms:  # Vérifier si le joueur est dans la room
-                game.gerer_deconnexion_temporaire(username)
-                break
+            game.gerer_deconnexion_temporaire(username)
+            break
 
 @socketio.on('ping_client')
 def handle_ping():
@@ -872,18 +1023,26 @@ def handle_joueur_pret(data):
         return
         
     game = games[room]
+    
+    if game.partie_en_cours:
+        emit('erreur', {'message': 'La partie est déjà en cours'}, room=username)
+        return
+        
     game.joueurs_prets.add(username)
     
-    # Notifier tous les joueurs du changement d'état
     socketio.emit('update_joueurs_prets', {
         'joueurs_prets': list(game.joueurs_prets)
     }, room=room)
     
-    # Si tous les joueurs sont prêts, démarrer la partie
     if game.verifier_tous_prets():
-        game.distribuer_cartes()
-        socketio.emit('partie_demarree', room=room)
-        game.update_game_state()
+        if game.demarrer_partie():
+            socketio.emit('partie_demarree', {
+                'room': room,
+                'partie_en_cours': True
+            }, room=room)
+            
+            # Notifier immédiatement tous les clients du changement d'état
+            broadcast_tables_update()
 
 @socketio.on('joueur_pas_pret')
 def handle_joueur_pas_pret(data):
@@ -901,6 +1060,21 @@ def handle_joueur_pas_pret(data):
     socketio.emit('update_joueurs_prets', {
         'joueurs_prets': list(game.joueurs_prets)
     }, room=room)
+
+@socketio.on('demander_update_tables')
+def handle_demander_update_tables():
+    # Envoyer la liste des tables disponibles
+    socketio.emit('update_tables', {
+        'tables': {
+            room_id: {
+                'joueurs': {
+                    u: {'jetons': j['jetons']} 
+                    for u, j in game.joueurs.items()
+                },
+                'partie_en_cours': game.partie_en_cours
+            } for room_id, game in games.items()
+        }
+    }, broadcast=True)  # Envoyer à tous les clients
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port=5000) 

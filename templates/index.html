@@ -745,6 +745,72 @@
             transform: translateY(-2px);
             box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
         }
+
+        .game-in-progress {
+            background-color: #ff9800;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+        
+        .table-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .player-spot.waiting {
+            background-color: rgba(255, 152, 0, 0.3);
+            border: 2px solid #ff9800;
+        }
+
+        .player-spot.waiting::after {
+            content: 'En attente';
+            position: absolute;
+            bottom: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #ff9800;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .game-waiting {
+            background-color: #4CAF50;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+
+        .table-info {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .table-players {
+            margin-top: 8px;
+            color: #bbb;
+            font-size: 0.9em;
+        }
+
+        .players-list {
+            margin-top: 4px;
+            color: #fff;
+            font-style: italic;
+        }
+
+        .table-id {
+            font-size: 1.1em;
+            color: #4CAF50;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -788,11 +854,11 @@
             </div>
 
             <div class="game-controls">
-                <button id="startGameButton" class="action-button" style="position: absolute; top: 10px; right: 10px; display: none;">DÉMARRER LA PARTIE</button>
                 <div class="action-buttons">
                     <button id="checkButton" class="action-button">CHECK</button>
                     <button id="callButton" class="action-button">SUIVRE</button>
                     <button id="betButton" class="action-button">MISER</button>
+                    <button id="allinButton" class="action-button" style="background-color: #f44336;">ALL-IN</button>
                     <button id="foldButton" class="action-button">SE COUCHER</button>
                 </div>
                 <div class="bet-controls">
@@ -950,31 +1016,34 @@
 
         function updateTablesList(tables) {
             const tablesList = document.getElementById('tables-list');
-            let html = '<h2>Tables disponibles</h2>';
+            tablesList.innerHTML = '<h2>Tables disponibles</h2>';
             
-            if (Object.keys(tables).length === 0) {
-                html += '<div style="text-align: center; margin-top: 20px; color: #666;">Aucune table disponible</div>';
-            } else {
-                Object.entries(tables).forEach(([tableId, tableInfo]) => {
-                    if (tableInfo.joueurs && Object.keys(tableInfo.joueurs).length > 0) {
-                        const joueurs = Object.keys(tableInfo.joueurs).join(', ');
-                        const nbJoueurs = Object.keys(tableInfo.joueurs).length;
-                        html += `
-                            <div class="table-item">
-                                <div class="table-info">
-                                    <div>Table #${tableId.slice(-4)}</div>
-                                    <div class="table-players">Joueurs (${nbJoueurs}/7): ${joueurs}</div>
-                                </div>
-                                <button class="join-button" onclick="rejoindreTable('${tableId}')">
-                                    Rejoindre
-                                </button>
-                            </div>
-                        `;
-                    }
-                });
+            for (const [tableId, tableData] of Object.entries(tables)) {
+                const tableDiv = document.createElement('div');
+                tableDiv.className = 'table-item';
+                
+                const playerCount = Object.keys(tableData.joueurs).length;
+                const joueurs = Object.keys(tableData.joueurs).join(', ');
+                const statusText = tableData.partie_en_cours ? '<span class="game-in-progress">Partie en cours</span>' : '<span class="game-waiting">En attente</span>';
+                
+                tableDiv.innerHTML = `
+                    <div class="table-info">
+                        <div>
+                            <span class="table-id">Table #${tableId.slice(-4)}</span>
+                            ${statusText}
+                        </div>
+                        <div class="table-players">
+                            <div>${playerCount} joueur(s)</div>
+                            <div class="players-list">${joueurs}</div>
+                        </div>
+                    </div>
+                    <button class="join-button" onclick="rejoindreTable('${tableId}')" 
+                            ${tableData.partie_en_cours ? 'title="Vous devrez attendre la fin de la manche en cours"' : ''}>
+                        Rejoindre
+                    </button>
+                `;
+                tablesList.appendChild(tableDiv);
             }
-            
-            tablesList.innerHTML = html;
         }
 
         // Nouveaux événements socket
@@ -989,6 +1058,18 @@
                 currentRoom = '';
                 currentUser = '';
                 showNotification('La table a été fermée', 'warning');
+            } else if (currentRoom && tables[currentRoom]) {
+                // Mettre à jour l'affichage si nous sommes dans une partie
+                if (tables[currentRoom].partie_en_cours) {
+                    document.getElementById('game-section').style.display = 'block';
+                    document.getElementById('login-section').style.display = 'none';
+                    
+                    // Cacher le bouton prêt quand la partie est en cours
+                    const readyButton = document.getElementById('readyButton');
+                    if (readyButton) {
+                        readyButton.style.display = 'none';
+                    }
+                }
             }
         });
 
@@ -997,19 +1078,18 @@
             document.getElementById('login-section').style.display = 'none';
             document.getElementById('game-section').style.display = 'block';
             
-            // Réinitialiser et afficher le bouton prêt
+            // Réinitialiser et afficher le bouton prêt seulement si la partie n'est pas en cours
             const readyButton = document.getElementById('readyButton');
-            readyButton.style.display = 'block';
-            readyButton.textContent = 'PAS PRÊT';
-            readyButton.classList.add('not-ready');
-            isReady = false;
+            if (data.partie_en_cours) {
+                readyButton.style.display = 'none';
+                showNotification('Vous devrez attendre la fin de la manche en cours pour jouer', 'warning');
+            } else {
+                readyButton.style.display = 'block';
+                readyButton.textContent = 'PAS PRÊT';
+                readyButton.classList.add('not-ready');
+                isReady = false;
+            }
         });
-
-        function demarrerPartie() {
-            socket.emit('demarrer_partie', {
-                room: currentRoom
-            });
-        }
 
         function updateControls() {
             const buttons = document.querySelectorAll('.controls button');
@@ -1061,27 +1141,27 @@
             showNotification(`${data.username} a rejoint la partie`, 'success');
             updateJoueurs(data.joueurs);
             
-            // Réinitialiser et afficher le bouton prêt
+            // Réinitialiser et afficher le bouton prêt seulement si la partie n'est pas en cours
             const readyButton = document.getElementById('readyButton');
-            readyButton.style.display = 'block';
-            readyButton.textContent = 'PAS PRÊT';
-            readyButton.classList.add('not-ready');
-            isReady = false;
+            if (data.partie_en_cours) {
+                readyButton.style.display = 'none';
+                showNotification('Vous devrez attendre la fin de la manche en cours pour jouer', 'warning');
+            } else {
+                readyButton.style.display = 'block';
+                readyButton.textContent = 'PAS PRÊT';
+                readyButton.classList.add('not-ready');
+                isReady = false;
+            }
         });
 
-        socket.on('activer_demarrage', () => {
-            const btnDemarrer = document.getElementById('btn-demarrer');
-            btnDemarrer.disabled = false;
-            btnDemarrer.style.display = 'block';
-            showNotification('La partie peut démarrer !', 'success');
-        });
-
-        socket.on('partie_demarree', () => {
+        socket.on('partie_demarree', (data) => {
             // Cacher le bouton prêt et réinitialiser son état
             const readyButton = document.getElementById('readyButton');
-            readyButton.style.display = 'none';
-            readyButton.textContent = 'PAS PRÊT';
-            readyButton.classList.add('not-ready');
+            if (readyButton) {
+                readyButton.style.display = 'none';
+                readyButton.textContent = 'PAS PRÊT';
+                readyButton.classList.add('not-ready');
+            }
             isReady = false;
 
             // Cacher tous les indicateurs "PRÊT"
@@ -1089,10 +1169,20 @@
                 status.classList.remove('ready');
             });
 
-            // Cacher le bouton démarrer
-            document.getElementById('startGameButton').style.display = 'none';
-
-            showNotification('La partie commence !', 'success');
+            // Mettre à jour l'état de la partie
+            if (data && data.partie_en_cours) {
+                showNotification('La partie commence !', 'success');
+                
+                // Mettre à jour l'affichage de la phase
+                const phaseIndicator = document.getElementById('phase');
+                if (phaseIndicator) {
+                    phaseIndicator.textContent = 'Pre-flop';
+                }
+                
+                // Basculer vers la vue de jeu
+                document.getElementById('game-section').style.display = 'block';
+                document.getElementById('login-section').style.display = 'none';
+            }
         });
 
         function afficherCarte(carte) {
@@ -1214,6 +1304,12 @@
                 
                 const spot = document.createElement('div');
                 spot.className = `player-spot${username === currentUser ? ' active' : ''}`;
+                
+                // Ajouter la classe 'waiting' si le joueur n'est pas en_jeu à cause d'une partie en cours
+                if (!data.en_jeu && data.jetons > 0) {
+                    spot.classList.add('waiting');
+                }
+                
                 spot.setAttribute('data-username', username);
                 
                 // Ajouter l'attribut data-active si c'est le tour du joueur
@@ -1229,7 +1325,7 @@
                 }
                 
                 let statusHtml = '';
-                if (!data.en_jeu) {
+                if (!data.en_jeu && data.jetons <= 0) {
                     statusHtml = '<div>(Couché)</div>';
                 }
 
@@ -1258,8 +1354,7 @@
 
         // Au chargement initial, désactiver le bouton démarrer
         document.addEventListener('DOMContentLoaded', () => {
-            const btnDemarrer = document.getElementById('btn-demarrer');
-            btnDemarrer.disabled = true;
+            // Ne rien faire, le bouton a été supprimé
         });
 
         socket.on('fin_manche', (data) => {
@@ -1552,6 +1647,7 @@
             document.getElementById('checkButton').disabled = !isCurrentPlayer || !canCheckAction;
             document.getElementById('callButton').disabled = !isCurrentPlayer;
             document.getElementById('betButton').disabled = !isCurrentPlayer;
+            document.getElementById('allinButton').disabled = !isCurrentPlayer;
             document.getElementById('foldButton').disabled = !isCurrentPlayer;
             
             // Mettre à jour l'interface avec le pot actuel
@@ -1600,36 +1696,6 @@
             });
         });
 
-        // Gestionnaire pour le bouton démarrer
-        document.getElementById('startGameButton').addEventListener('click', () => {
-            socket.emit('demarrer_partie', {
-                room: currentRoom
-            });
-        });
-
-        socket.on('activer_demarrage', () => {
-            document.getElementById('startGameButton').style.display = 'block';
-        });
-
-        socket.on('partie_demarree', () => {
-            // Cacher le bouton prêt et réinitialiser son état
-            const readyButton = document.getElementById('readyButton');
-            readyButton.style.display = 'none';
-            readyButton.textContent = 'PAS PRÊT';
-            readyButton.classList.add('not-ready');
-            isReady = false;
-
-            // Cacher tous les indicateurs "PRÊT"
-            document.querySelectorAll('.ready-status').forEach(status => {
-                status.classList.remove('ready');
-            });
-
-            // Cacher le bouton démarrer
-            document.getElementById('startGameButton').style.display = 'none';
-
-            showNotification('La partie commence !', 'success');
-        });
-
         function toggleReady() {
             const button = document.getElementById('readyButton');
             isReady = !isReady;
@@ -1671,6 +1737,32 @@
                     readyStatus.classList.remove('ready');
                 }
             });
+        });
+
+        document.getElementById('allinButton').addEventListener('click', () => {
+            if (confirm('Êtes-vous sûr de vouloir faire tapis ?')) {
+                socket.emit('action_joueur', {
+                    action: 'allin',
+                    room: currentRoom,
+                    username: currentUser
+                });
+            }
+        });
+
+        socket.on('update_game_state', function(data) {
+            currentPot = data.pot;
+            canCheckAction = data.mise_actuelle === 0;
+            
+            // Activer/désactiver les boutons selon l'état du jeu
+            const isCurrentPlayer = data.tour_actuel === currentUser;
+            document.getElementById('checkButton').disabled = !isCurrentPlayer || !canCheckAction;
+            document.getElementById('callButton').disabled = !isCurrentPlayer;
+            document.getElementById('betButton').disabled = !isCurrentPlayer;
+            document.getElementById('allinButton').disabled = !isCurrentPlayer;
+            document.getElementById('foldButton').disabled = !isCurrentPlayer;
+            
+            // Mettre à jour l'interface avec le pot actuel
+            updatePotDisplay(data.pot);
         });
     </script>
 </body>
